@@ -1,0 +1,80 @@
+# manifest/application.yaml.template
+
+apiVersion: app.k8s.io/v1beta1
+kind: Application
+metadata:
+  name: "$name"
+  namespace: "$namespace"
+  annotations:
+    marketplace.cloud.google.com/deploy-info: '{"partner_id": "hashicorp", "product_id": "vault", "partner_name": "HashiCorp"}'
+  labels:
+    app.kubernetes.io/name: "$name"
+spec:
+  descriptor:
+    type: Vault
+    version: '1.21.0'
+    description: |-
+      HashiCorp Vault secures, stores, and tightly controls access to tokens,
+      passwords, certificates, API keys, and other secrets in modern computing.
+
+      Vault provides encryption services that are gated by authentication and
+      authorization methods. Using Vault's UI, CLI, or HTTP API, access to
+      secrets and other sensitive data can be securely stored and managed.
+    maintainers:
+      - name: HashiCorp
+        url: https://hashicorp.com
+    links:
+      - description: Documentation
+        url: https://developer.hashicorp.com/vault/docs
+      - description: Getting Started
+        url: https://developer.hashicorp.com/vault/tutorials
+      - description: GitHub
+        url: https://github.com/hashicorp/vault
+    notes: |-
+      # Access Vault
+
+      Vault is deployed in sealed state. To use Vault, you must first initialize and unseal it.
+
+      ## Initialize Vault
+
+      ```shell
+      kubectl exec -it $name-vault-0 -n $namespace -- vault operator init
+      ```
+
+      Save the unseal keys and root token securely.
+
+      ## Unseal Vault
+
+      Run this command 3 times with different unseal keys:
+
+      ```shell
+      kubectl exec -it $name-vault-0 -n $namespace -- vault operator unseal
+      ```
+
+      ## Access the UI
+
+      ```shell
+      kubectl port-forward svc/$name-vault-ui -n $namespace 8200:8200
+      ```
+
+      Then open https://localhost:8200 in your browser.
+
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "$name"
+
+  componentKinds:
+    - group: v1
+      kind: Service
+    - group: v1
+      kind: ConfigMap
+    - group: v1
+      kind: Secret
+    - group: v1
+      kind: ServiceAccount
+    - group: apps/v1
+      kind: StatefulSet
+    - group: apps/v1
+      kind: Deployment
+    - group: v1
+      kind: PersistentVolumeClaim

@@ -1,0 +1,25 @@
+# apptest/deployer/schema.yaml
+
+x-google-marketplace:
+  schemaVersion: v2
+  applicationApiVersion: v1beta1
+
+  testingConstraints:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+
+properties:
+  name:
+    type: string
+    x-google-marketplace:
+      type: NAME
+  namespace:
+    type: string
+    x-google-marketplace:
+      type: NAMESPACE
+  # Override replicas for testing - single node simplifies init/unseal
+  replicas:
+    type: integer
+    default: 1

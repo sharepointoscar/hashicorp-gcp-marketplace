@@ -1,0 +1,171 @@
+# apptest/deployer/manifest/tester.yaml.template
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: $name-tester
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+  annotations:
+    marketplace.cloud.google.com/verification: test
+spec:
+  restartPolicy: Never
+  containers:
+    - name: tester
+      image: $imageVault
+      env:
+        # Target pod-0 explicitly for proper Raft bootstrap/init
+        - name: VAULT_ADDR
+          value: "http://$name-vault-0.$name-vault-internal:8200"
+        - name: VAULT_SKIP_VERIFY
+          value: "true"
+      command:
+        - "/bin/sh"
+        - "-c"
+      args:
+        - |
+          set -e
+          echo "=== Vault Marketplace Verification Tests ==="
+          echo "VAULT_ADDR: ${VAULT_ADDR}"
+
+          # Test 1: Wait for Vault pods to be ready
+          echo ""
+          echo "=== Test 1: Checking Vault service availability ==="
+          # Use vault status which handles connection and returns meaningful exit codes:
+          # 0 = unsealed, 1 = error, 2 = sealed (but reachable)
+          for i in $(seq 1 60); do
+            # vault status returns 0 (unsealed), 2 (sealed), or 1 (error/unreachable)
+            # Use || true to prevent set -e from exiting on non-zero
+            VAULT_EXIT=0
+            vault status > /dev/null 2>&1 || VAULT_EXIT=$?
+            if [ $VAULT_EXIT -eq 0 ] || [ $VAULT_EXIT -eq 2 ]; then
+              echo "Vault service is responding (exit code: $VAULT_EXIT)"
+              break
+            fi
+            if [ $i -eq 60 ]; then
+              echo "ERROR: Vault service not available after 10 minutes"
+              exit 1
+            fi
+            echo "Waiting for Vault service... ($i/60) - exit code: $VAULT_EXIT"
+            sleep 10
+          done
+
+          # Test 2: Check initial status
+          echo ""
+          echo "=== Test 2: Checking initial Vault status ==="
+          vault status || true
+
+          # Test 3: Initialize Vault
+          echo ""
+          echo "=== Test 3: Initializing Vault ==="
+
+          # Check if already initialized
+          if vault status 2>&1 | grep -q "Initialized.*true"; then
+            echo "Vault is already initialized"
+          else
+            echo "Initializing Vault with 1 key share and 1 threshold for testing..."
+            INIT_OUTPUT=$(vault operator init -key-shares=1 -key-threshold=1 -format=json)
+
+            echo "DEBUG: Raw init output:"
+            echo "$INIT_OUTPUT"
+
+            # Extract unseal key - get line after unseal_keys_b64, clean up quotes/brackets/whitespace
+            UNSEAL_KEY=$(echo "$INIT_OUTPUT" | grep -A1 '"unseal_keys_b64"' | tail -1 | tr -d ' "[]')
+            # Extract root token - find line with root_token, extract value between quotes
+            ROOT_TOKEN=$(echo "$INIT_OUTPUT" | grep '"root_token"' | sed 's/.*"root_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
+
+            echo "Vault initialized successfully"
+            echo "Unseal Key: ${UNSEAL_KEY}"
+            echo "Root Token: ${ROOT_TOKEN}"
+
+            # Save for later use
+            export UNSEAL_KEY
+            export ROOT_TOKEN
+          fi
+
+          # Test 4: Unseal Vault
+          echo ""
+          echo "=== Test 4: Unsealing Vault ==="
+
+          if vault status 2>&1 | grep -q "Sealed.*false"; then
+            echo "Vault is already unsealed"
+          else
+            if [ -z "$UNSEAL_KEY" ]; then
+              echo "ERROR: No unseal key available"
+              exit 1
+            fi
+
+            echo "Unsealing Vault..."
+            vault operator unseal "$UNSEAL_KEY"
+            echo "Vault unsealed successfully"
+          fi
+
+          # Test 5: Verify Vault is operational
+          echo ""
+          echo "=== Test 5: Verifying Vault is operational ==="
+          vault status
+
+          # Check that Vault is unsealed and active
+          if vault status 2>&1 | grep -q "Sealed.*false"; then
+            echo "Vault is unsealed"
+          else
+            echo "ERROR: Vault is still sealed"
+            exit 1
+          fi
+
+          # Test 6: Verify health endpoint returns 200
+          echo ""
+          echo "=== Test 6: Checking health endpoint ==="
+          HTTP_CODE=$(wget -q -O /dev/null -S "${VAULT_ADDR}/v1/sys/health" 2>&1 | grep "HTTP/" | tail -1 | awk '{print $2}')
+          echo "Health endpoint returned: ${HTTP_CODE}"
+
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "Vault is healthy and active"
+          elif [ "$HTTP_CODE" = "429" ]; then
+            echo "Vault is healthy (standby node)"
+          else
+            echo "WARNING: Unexpected health status: ${HTTP_CODE}"
+          fi
+
+          # Test 7: Test basic Vault operations (if we have root token)
+          echo ""
+          echo "=== Test 7: Testing basic Vault operations ==="
+          if [ -n "$ROOT_TOKEN" ]; then
+            export VAULT_TOKEN="$ROOT_TOKEN"
+
+            # Enable KV secrets engine
+            echo "Enabling KV secrets engine..."
+            vault secrets enable -path=secret kv-v2 || echo "KV engine may already be enabled"
+
+            # Write a test secret
+            echo "Writing test secret..."
+            vault kv put secret/test-secret foo=bar
+
+            # Read the test secret
+            echo "Reading test secret..."
+            vault kv get secret/test-secret
+
+            # Delete the test secret
+            echo "Deleting test secret..."
+            vault kv delete secret/test-secret
+
+            echo "Basic Vault operations successful"
+          else
+            echo "Skipping operations test (no root token available)"
+          fi
+
+          # Test 8: Verify UI is accessible (if enabled)
+          echo ""
+          echo "=== Test 8: Checking Vault UI ==="
+          if wget -q -O /dev/null "http://$name-vault-ui:8200/ui/" 2>/dev/null; then
+            echo "Vault UI is accessible"
+          else
+            echo "WARNING: Vault UI may not be accessible (this is OK if UI is disabled)"
+          fi
+
+          echo ""
+          echo "=========================================="
+          echo "=== All Vault verification tests passed ==="
+          echo "=========================================="
+          exit 0

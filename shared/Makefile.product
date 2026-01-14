@@ -1,0 +1,63 @@
+# shared/Makefile.product
+# Generic product build patterns for GCP Marketplace
+# Products include this and define: APP_ID, APP_IMAGES, MP_SERVICE_NAME
+
+# Required variables (must be set by product Makefile)
+ifndef APP_ID
+$(error APP_ID is not set)
+endif
+
+ifndef REGISTRY
+$(error REGISTRY is not set. Example: gcr.io/your-project-id)
+endif
+
+# Default TAG if not set
+TAG ?= latest
+
+# Derived variables
+APP_DEPLOYER_IMAGE := $(REGISTRY)/$(APP_ID)/deployer
+APP_TESTER_IMAGE := $(REGISTRY)/$(APP_ID)/tester
+
+# Annotation flag (if MP_SERVICE_NAME is set)
+ifdef MP_SERVICE_NAME
+ANNOTATION_FLAG := --annotation "com.googleapis.cloudmarketplace.product.service.name=$(MP_SERVICE_NAME)"
+else
+ANNOTATION_FLAG :=
+endif
+
+.PHONY: app/build app/verify app/install
+
+# Generic deployer build rule
+$(BUILD_DIR)/$(APP_ID)/deployer: deployer/* manifest/* schema.yaml | $(BUILD_DIR)
+	$(call print_notice,Building deployer for $(APP_ID)...)
+	@mkdir -p $(BUILD_DIR)/$(APP_ID)
+	docker buildx build $(DOCKER_BUILD_FLAGS) \
+		$(ANNOTATION_FLAG) \
+		--build-arg REGISTRY="$(REGISTRY)/$(APP_ID)" \
+		--build-arg TAG="$(TAG)" \
+		--tag "$(APP_DEPLOYER_IMAGE):$(TAG)" \
+		-f deployer/Dockerfile \
+		--push .
+	@touch "$@"
+	$(call print_success,Deployer built: $(APP_DEPLOYER_IMAGE):$(TAG))
+
+# Generic tester build rule
+$(BUILD_DIR)/$(APP_ID)/tester: apptest/deployer/* | $(BUILD_DIR)
+	$(call print_notice,Building tester for $(APP_ID)...)
+	@mkdir -p $(BUILD_DIR)/$(APP_ID)
+	docker buildx build $(DOCKER_BUILD_FLAGS) \
+		--tag "$(APP_TESTER_IMAGE):$(TAG)" \
+		-f apptest/deployer/Dockerfile \
+		--push apptest/deployer
+	@touch "$@"
+	$(call print_success,Tester built: $(APP_TESTER_IMAGE):$(TAG))
+
+# Run mpdev verify
+app/verify:
+	$(call print_notice,Running mpdev verify for $(APP_ID)...)
+	mpdev verify --deployer="$(APP_DEPLOYER_IMAGE):$(TAG)"
+
+# Run mpdev install
+app/install:
+	$(call print_notice,Running mpdev install for $(APP_ID)...)
+	mpdev install --deployer="$(APP_DEPLOYER_IMAGE):$(TAG)"

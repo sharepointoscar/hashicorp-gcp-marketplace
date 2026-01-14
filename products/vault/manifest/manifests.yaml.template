@@ -1,0 +1,297 @@
+# manifest/manifests.yaml.template
+
+---
+# ConfigMap for Vault configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: $name-vault-config
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+data:
+  vault.hcl: |
+    ui = true
+
+    listener "tcp" {
+      address = "[::]:8200"
+      cluster_address = "[::]:8201"
+      tls_disable = true
+    }
+
+    storage "raft" {
+      path = "/vault/data"
+
+      retry_join {
+        leader_api_addr = "http://$name-vault-0.$name-vault-internal:8200"
+      }
+      retry_join {
+        leader_api_addr = "http://$name-vault-1.$name-vault-internal:8200"
+      }
+      retry_join {
+        leader_api_addr = "http://$name-vault-2.$name-vault-internal:8200"
+      }
+    }
+
+    service_registration "kubernetes" {}
+
+    disable_mlock = true
+
+---
+# Headless service for StatefulSet DNS
+apiVersion: v1
+kind: Service
+metadata:
+  name: $name-vault-internal
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200
+    - name: https-internal
+      port: 8201
+      targetPort: 8201
+  selector:
+    app.kubernetes.io/name: "$name"
+    app.kubernetes.io/component: server
+
+---
+# External service for Vault API
+apiVersion: v1
+kind: Service
+metadata:
+  name: $name-vault
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200
+  selector:
+    app.kubernetes.io/name: "$name"
+    app.kubernetes.io/component: server
+    vault-active: "true"
+
+---
+# UI Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: $name-vault-ui
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8200
+      targetPort: 8200
+  selector:
+    app.kubernetes.io/name: "$name"
+    app.kubernetes.io/component: server
+
+---
+# Vault Server StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: $name-vault
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+    app.kubernetes.io/component: server
+spec:
+  serviceName: $name-vault-internal
+  replicas: $replicas
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: OnDelete
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "$name"
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: "$name"
+        app.kubernetes.io/component: server
+    spec:
+      serviceAccountName: $vaultServiceAccount
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 1000
+        fsGroup: 1000
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: vault
+          image: $imageVault
+          imagePullPolicy: IfNotPresent
+          command:
+            - "/bin/sh"
+            - "-ec"
+          args:
+            - |
+              vault server -config=/vault/config/vault.hcl
+          env:
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: VAULT_K8S_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: VAULT_K8S_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: VAULT_ADDR
+              value: "http://127.0.0.1:8200"
+            - name: VAULT_API_ADDR
+              value: "http://$(POD_IP):8200"
+            - name: VAULT_CLUSTER_ADDR
+              value: "http://$(POD_IP):8201"
+            - name: SKIP_CHOWN
+              value: "true"
+            - name: SKIP_SETCAP
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 8200
+            - name: https-internal
+              containerPort: 8201
+          # Readiness probe accepts sealed vault (exit 0 or 2)
+          # Exit 0 = unsealed, Exit 2 = sealed but healthy
+          readinessProbe:
+            exec:
+              command: ["/bin/sh", "-ec", "vault status -tls-skip-verify || [ $? -eq 2 ]"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 2
+            successThreshold: 1
+            timeoutSeconds: 3
+          # Liveness probe - accepts sealed (exit 2) and unsealed (exit 0) states
+          # Exit 0 = unsealed, Exit 2 = sealed but process is alive
+          livenessProbe:
+            exec:
+              command: ["/bin/sh", "-c", "vault status -tls-skip-verify || [ $? -eq 2 ]"]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 500m
+              memory: 256Mi
+            limits:
+              cpu: 2000m
+              memory: 1Gi
+          volumeMounts:
+            - name: config
+              mountPath: /vault/config
+            - name: data
+              mountPath: /vault/data
+
+        # Usage reporting sidecar (required for Marketplace billing)
+        - name: ubbagent
+          image: $imageUbbagent
+          env:
+            - name: AGENT_CONFIG_FILE
+              value: /etc/ubbagent/config.yaml
+            - name: AGENT_LOCAL_PORT
+              value: "6080"
+            - name: AGENT_STATE_DIR
+              value: /var/lib/ubbagent
+            - name: AGENT_REPORT_DIR
+              value: /var/lib/ubbagent/reports
+            - name: AGENT_ENCODED_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: "$reportingSecret"
+                  key: reporting-key
+            - name: AGENT_CONSUMER_ID
+              valueFrom:
+                secretKeyRef:
+                  name: "$reportingSecret"
+                  key: consumer-id
+          volumeMounts:
+            - name: ubbagent-config
+              mountPath: /etc/ubbagent
+            - name: ubbagent-state
+              mountPath: /var/lib/ubbagent
+
+      volumes:
+        - name: config
+          configMap:
+            name: $name-vault-config
+        - name: ubbagent-config
+          configMap:
+            name: $name-ubbagent-config
+        - name: ubbagent-state
+          emptyDir: {}
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: "$storageClass"
+        resources:
+          requests:
+            storage: "$storageSize"
+
+---
+# UBB Agent ConfigMap (Usage-Based Billing)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: $name-ubbagent-config
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+data:
+  config.yaml: |
+    identities:
+      - name: gcp
+        gcp:
+          encodedServiceAccountKey: $AGENT_ENCODED_KEY
+
+    metrics:
+      - name: vault_instance_time
+        type: int
+        endpoints:
+          - name: servicecontrol
+        passthrough: {}
+
+    endpoints:
+      - name: servicecontrol
+        servicecontrol:
+          identity: gcp
+          # serviceName format: <solution-id>.mp-<partner-id>.appspot.com
+          # This is provided by Google during marketplace onboarding
+          serviceName: vault.mp-hashicorp.appspot.com
+          consumerId: $AGENT_CONSUMER_ID
+
+    sources:
+      - name: instance_time_heartbeat
+        heartbeat:
+          metric: vault_instance_time
+          intervalSeconds: 3600
+          value:
+            int64Value: 1

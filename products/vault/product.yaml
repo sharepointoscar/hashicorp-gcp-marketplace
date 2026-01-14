@@ -1,0 +1,22 @@
+# products/vault/product.yaml
+# Product metadata for HashiCorp Vault
+
+product:
+  id: vault
+  name: HashiCorp Vault
+  version: "1.21.0"
+  partnerId: hashicorp
+  solutionId: vault
+
+marketplace:
+  serviceName: services/vault-enterprise--1-16-ent.endpoints.${PROJECT_ID}.cloud.goog
+
+images:
+  - name: vault
+    path: images/vault
+  - name: vault-init
+    path: images/vault-init
+
+ubb:
+  metricName: vault_instance_time
+  serviceName: vault.mp-hashicorp.appspot.com
