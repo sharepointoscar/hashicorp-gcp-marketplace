@@ -1,0 +1,107 @@
+# apptest/deployer/schema.yaml
+# HashiCorp Terraform Enterprise (Disk Mode) - Test Schema
+
+x-google-marketplace:
+  schemaVersion: v2
+  applicationApiVersion: v1beta1
+  publishedVersion: 'v202501-1'
+  publishedVersionMetadata:
+    releaseNote: >-
+      Test deployment for Terraform Enterprise (Disk Mode) verification.
+  partnerId: hashicorp
+  solutionId: terraform-enterprise
+
+  images:
+    '':
+      properties:
+        imageTfe:
+          type: FULL
+    ubbagent:
+      properties:
+        imageUbbagent:
+          type: FULL
+    tester:
+      properties:
+        imageTester:
+          type: FULL
+
+properties:
+  name:
+    type: string
+    x-google-marketplace:
+      type: NAME
+
+  namespace:
+    type: string
+    x-google-marketplace:
+      type: NAMESPACE
+
+  tfeHostname:
+    type: string
+    default: "tfe-test.example.com"
+
+  tfeLicense:
+    type: string
+    default: "test-license-placeholder"
+
+  encryptionPassword:
+    type: string
+    default: "test-encryption-password-1234"
+
+  tlsCertificate:
+    type: string
+    # Base64 encoded self-signed test certificate
+    default: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUN0akNDQVo0Q0NRQ3RGVzFWL3pYOHZqQU5CZ2txaGtpRzl3MEJBUXNGQURBZE1Sc3dHUVlEVlFRRERCSjAKWm1VdGRHVnpkQzVsZUdGdGNHeGxMbU52YlRBZUZ3MHlOVEF4TURFeE1qQXdNREJhRncweU5qQXhNREV4TWpBdwpNREJhTUIweEd6QVpCZ05WQkFNTUVuUm1aUzEwWlhOMExtVjRZVzF3YkdVdVkyOXRNSUlCSWpBTkJna3Foa2lHCjl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUExdGVzdGtleXZhbHVlAA0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo="
+
+  tlsPrivateKey:
+    type: string
+    # Base64 encoded test private key
+    default: "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2Z0lCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktnd2dnU2tBZ0VBQW9JQkFRRFcxdGVzdGtleQotLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tCg=="
+
+  storageSize:
+    type: string
+    default: "10Gi"
+
+  tfeHttpPort:
+    type: integer
+    default: 80
+
+  tfeHttpsPort:
+    type: integer
+    default: 443
+
+  tfeServiceAccount:
+    type: string
+    x-google-marketplace:
+      type: SERVICE_ACCOUNT
+      serviceAccount:
+        description: Service account for test deployment
+        roles:
+          - type: ClusterRole
+            rulesType: CUSTOM
+            rules:
+              - apiGroups: [""]
+                resources: ["secrets", "configmaps", "persistentvolumeclaims"]
+                verbs: ["get", "list", "watch", "create", "update", "patch"]
+              - apiGroups: [""]
+                resources: ["pods", "pods/exec"]
+                verbs: ["get", "list", "watch", "create", "delete"]
+
+  reportingSecret:
+    type: string
+    x-google-marketplace:
+      type: REPORTING_SECRET
+
+  testerTimeout:
+    type: integer
+    default: 600
+
+required:
+  - name
+  - namespace
+  - tfeHostname
+  - tfeLicense
+  - encryptionPassword
+  - tlsCertificate
+  - tlsPrivateKey
+  - reportingSecret

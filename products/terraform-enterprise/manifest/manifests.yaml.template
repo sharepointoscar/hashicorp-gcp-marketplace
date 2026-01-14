@@ -1,0 +1,313 @@
+# manifest/manifests.yaml.template
+# HashiCorp Terraform Enterprise (Disk Mode) - Kubernetes Resources
+
+---
+# Secret for TFE image pull (uses license as password)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: $name-tfe-registry
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+type: kubernetes.io/dockerconfigjson
+stringData:
+  .dockerconfigjson: |
+    {
+      "auths": {
+        "images.releases.hashicorp.com": {
+          "username": "terraform",
+          "password": "$tfeLicense"
+        }
+      }
+    }
+
+---
+# Secret for TFE configuration (sensitive values)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: $name-tfe-config
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+type: Opaque
+stringData:
+  license: "$tfeLicense"
+  enc-password: "$encryptionPassword"
+
+---
+# Secret for TLS certificates
+apiVersion: v1
+kind: Secret
+metadata:
+  name: $name-tfe-tls
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+type: kubernetes.io/tls
+data:
+  tls.crt: "$tlsCertificate"
+  tls.key: "$tlsPrivateKey"
+
+---
+# ConfigMap for TFE configuration (non-sensitive values)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: $name-tfe-env
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+data:
+  TFE_HOSTNAME: "$tfeHostname"
+  TFE_OPERATIONAL_MODE: "disk"
+  TFE_HTTP_PORT: "$tfeHttpPort"
+  TFE_HTTPS_PORT: "$tfeHttpsPort"
+  TFE_TLS_CERT_FILE: "/etc/ssl/private/terraform-enterprise/tls.crt"
+  TFE_TLS_KEY_FILE: "/etc/ssl/private/terraform-enterprise/tls.key"
+  TFE_DISK_CACHE_VOLUME_NAME: "tfe-cache"
+  TFE_RUN_PIPELINE_DRIVER: "docker"
+  TFE_IACT_SUBNETS: "0.0.0.0/0"
+  TFE_LOG_LEVEL: "info"
+
+---
+# PersistentVolumeClaim for TFE data (disk mode)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: $name-tfe-data
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: $storageSize
+  storageClassName: standard-rwo
+
+---
+# Service for TFE (LoadBalancer)
+apiVersion: v1
+kind: Service
+metadata:
+  name: $name-tfe
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+    app.kubernetes.io/component: tfe
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: "$name"
+    app.kubernetes.io/component: tfe
+  ports:
+    - name: https
+      port: 443
+      targetPort: $tfeHttpsPort
+      protocol: TCP
+    - name: http
+      port: 80
+      targetPort: $tfeHttpPort
+      protocol: TCP
+
+---
+# StatefulSet for TFE (Disk Mode)
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: $name-tfe
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+    app.kubernetes.io/component: tfe
+spec:
+  serviceName: $name-tfe
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "$name"
+      app.kubernetes.io/component: tfe
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: "$name"
+        app.kubernetes.io/component: tfe
+    spec:
+      serviceAccountName: $tfeServiceAccount
+      imagePullSecrets:
+        - name: $name-tfe-registry
+      securityContext:
+        fsGroup: 1000
+      terminationGracePeriodSeconds: 60
+      containers:
+        # Terraform Enterprise container
+        - name: terraform-enterprise
+          image: $imageTfe
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: https
+              containerPort: $tfeHttpsPort
+              protocol: TCP
+            - name: http
+              containerPort: $tfeHttpPort
+              protocol: TCP
+          securityContext:
+            capabilities:
+              add:
+                - IPC_LOCK
+          envFrom:
+            - configMapRef:
+                name: $name-tfe-env
+          env:
+            - name: TFE_LICENSE
+              valueFrom:
+                secretKeyRef:
+                  name: $name-tfe-config
+                  key: license
+            - name: TFE_ENCRYPTION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: $name-tfe-config
+                  key: enc-password
+          volumeMounts:
+            - name: tfe-data
+              mountPath: /var/lib/terraform-enterprise
+            - name: tfe-tls
+              mountPath: /etc/ssl/private/terraform-enterprise
+              readOnly: true
+            - name: tfe-cache
+              mountPath: /var/cache/tfe-task-worker/terraform
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+          resources:
+            requests:
+              cpu: 2000m
+              memory: 4Gi
+            limits:
+              cpu: 4000m
+              memory: 8Gi
+          # Readiness probe - TFE is ready when health endpoint responds
+          readinessProbe:
+            httpGet:
+              path: /_health_check
+              port: $tfeHttpsPort
+              scheme: HTTPS
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 10
+          # Liveness probe - TFE process is healthy
+          livenessProbe:
+            httpGet:
+              path: /_health_check
+              port: $tfeHttpsPort
+              scheme: HTTPS
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+          # Startup probe - allow time for initial startup
+          startupProbe:
+            httpGet:
+              path: /_health_check
+              port: $tfeHttpsPort
+              scheme: HTTPS
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+
+        # Usage reporting sidecar (required for Marketplace billing)
+        - name: ubbagent
+          image: $imageUbbagent
+          env:
+            - name: AGENT_CONFIG_FILE
+              value: /etc/ubbagent/config.yaml
+            - name: AGENT_LOCAL_PORT
+              value: "6080"
+            - name: AGENT_STATE_DIR
+              value: /var/lib/ubbagent
+            - name: AGENT_REPORT_DIR
+              value: /var/lib/ubbagent/reports
+            - name: AGENT_ENCODED_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: "$reportingSecret"
+                  key: reporting-key
+            - name: AGENT_CONSUMER_ID
+              valueFrom:
+                secretKeyRef:
+                  name: "$reportingSecret"
+                  key: consumer-id
+          volumeMounts:
+            - name: ubbagent-config
+              mountPath: /etc/ubbagent
+            - name: ubbagent-state
+              mountPath: /var/lib/ubbagent
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+
+      volumes:
+        - name: tfe-data
+          persistentVolumeClaim:
+            claimName: $name-tfe-data
+        - name: tfe-tls
+          secret:
+            secretName: $name-tfe-tls
+        - name: tfe-cache
+          emptyDir: {}
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+            type: Socket
+        - name: ubbagent-config
+          configMap:
+            name: $name-ubbagent-config
+        - name: ubbagent-state
+          emptyDir: {}
+
+---
+# UBB Agent ConfigMap (Usage-Based Billing)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: $name-ubbagent-config
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+data:
+  config.yaml: |
+    identities:
+      - name: gcp
+        gcp:
+          encodedServiceAccountKey: $AGENT_ENCODED_KEY
+
+    metrics:
+      - name: terraform_enterprise_instance_time
+        type: int
+        endpoints:
+          - name: servicecontrol
+        passthrough: {}
+
+    endpoints:
+      - name: servicecontrol
+        servicecontrol:
+          identity: gcp
+          serviceName: terraform-enterprise.mp-hashicorp.appspot.com
+          consumerId: $AGENT_CONSUMER_ID
+
+    sources:
+      - name: instance_time_heartbeat
+        heartbeat:
+          metric: terraform_enterprise_instance_time
+          intervalSeconds: 3600
+          value:
+            int64Value: 1

@@ -1,0 +1,25 @@
+# products/terraform-enterprise/product.yaml
+# Product metadata for HashiCorp Terraform Enterprise
+
+product:
+  id: terraform-enterprise
+  name: HashiCorp Terraform Enterprise
+  version: "v202501-1"
+  partnerId: hashicorp
+  solutionId: terraform-enterprise
+
+marketplace:
+  serviceName: services/terraform-enterprise.endpoints.${PROJECT_ID}.cloud.goog
+
+images:
+  - name: tfe
+    path: images/tfe
+
+# Operational mode for this deployment
+# disk: All-in-one (TFE + PostgreSQL + Redis + S3-compatible storage)
+# Replaces the deprecated demo/PoC mode
+operationalMode: disk
+
+ubb:
+  metricName: terraform_enterprise_instance_time
+  serviceName: terraform-enterprise.mp-hashicorp.appspot.com

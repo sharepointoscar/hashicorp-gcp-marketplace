@@ -1,0 +1,164 @@
+# schema.yaml
+# HashiCorp Terraform Enterprise (Disk Mode) - GCP Marketplace Schema
+
+x-google-marketplace:
+  schemaVersion: v2
+  applicationApiVersion: v1beta1
+
+  # MUST match the deployer image tag
+  publishedVersion: 'v202501-1'
+  publishedVersionMetadata:
+    releaseNote: >-
+      Initial release of HashiCorp Terraform Enterprise (Disk Mode) on Google Cloud Marketplace.
+      Disk mode provides an all-in-one deployment suitable for dev/test and PoC environments.
+    releaseTypes:
+      - Feature
+    recommended: true
+
+  # Partner and product identifiers (must match Partner Portal)
+  partnerId: hashicorp
+  solutionId: terraform-enterprise
+
+  # All images must be declared here for security scanning
+  images:
+    '':  # Primary image (tfe)
+      properties:
+        imageTfe:
+          type: FULL
+    ubbagent:
+      properties:
+        imageUbbagent:
+          type: FULL
+
+  # Cluster requirements for TFE Disk Mode
+  clusterConstraints:
+    resources:
+      - replicas: 1
+        requests:
+          cpu: 2000m
+          memory: 4Gi
+    k8sVersion: ">=1.25.0"
+
+# User-configurable properties (displayed in Marketplace UI)
+properties:
+  # Required: App instance name
+  name:
+    type: string
+    x-google-marketplace:
+      type: NAME
+
+  # Required: Kubernetes namespace
+  namespace:
+    type: string
+    x-google-marketplace:
+      type: NAMESPACE
+
+  # TFE Hostname (FQDN)
+  tfeHostname:
+    type: string
+    title: TFE Hostname
+    description: >-
+      Fully qualified domain name for accessing Terraform Enterprise.
+      This should be a DNS name that resolves to the load balancer IP.
+    default: "tfe.example.com"
+
+  # TFE License (required for image pull and TFE operation)
+  tfeLicense:
+    type: string
+    title: TFE License
+    description: >-
+      Terraform Enterprise license key. This is required for both
+      pulling the TFE container image and operating Terraform Enterprise.
+    x-google-marketplace:
+      type: STRING
+
+  # Encryption password for data at rest
+  encryptionPassword:
+    type: string
+    title: Encryption Password
+    description: >-
+      Password used to encrypt sensitive data at rest. Must be at least
+      16 characters. Store this securely - data cannot be recovered without it.
+    x-google-marketplace:
+      type: STRING
+
+  # TLS Certificate (base64 encoded)
+  tlsCertificate:
+    type: string
+    title: TLS Certificate (Base64)
+    description: >-
+      Base64-encoded TLS certificate for HTTPS. The certificate should
+      match the TFE hostname and include any intermediate certificates.
+    x-google-marketplace:
+      type: STRING
+
+  # TLS Private Key (base64 encoded)
+  tlsPrivateKey:
+    type: string
+    title: TLS Private Key (Base64)
+    description: >-
+      Base64-encoded TLS private key corresponding to the certificate.
+    x-google-marketplace:
+      type: STRING
+
+  # Storage size for disk mode
+  storageSize:
+    type: string
+    title: Storage Size
+    description: >-
+      Size of the persistent volume for TFE data storage.
+      Recommended minimum is 50Gi for production use.
+    default: "50Gi"
+
+  # TFE HTTP Port
+  tfeHttpPort:
+    type: integer
+    title: HTTP Port
+    description: HTTP port for TFE (used for health checks and redirects)
+    default: 80
+    minimum: 1
+    maximum: 65535
+
+  # TFE HTTPS Port
+  tfeHttpsPort:
+    type: integer
+    title: HTTPS Port
+    description: HTTPS port for TFE
+    default: 443
+    minimum: 1
+    maximum: 65535
+
+  # Service account for TFE
+  tfeServiceAccount:
+    type: string
+    title: TFE Service Account
+    x-google-marketplace:
+      type: SERVICE_ACCOUNT
+      serviceAccount:
+        description: Service account for Terraform Enterprise pods
+        roles:
+          - type: ClusterRole
+            rulesType: CUSTOM
+            rules:
+              - apiGroups: [""]
+                resources: ["secrets", "configmaps", "persistentvolumeclaims"]
+                verbs: ["get", "list", "watch", "create", "update", "patch"]
+              - apiGroups: [""]
+                resources: ["pods", "pods/exec"]
+                verbs: ["get", "list", "watch", "create", "delete"]
+
+  # Usage reporting secret (required for billing)
+  reportingSecret:
+    type: string
+    x-google-marketplace:
+      type: REPORTING_SECRET
+
+required:
+  - name
+  - namespace
+  - tfeHostname
+  - tfeLicense
+  - encryptionPassword
+  - tlsCertificate
+  - tlsPrivateKey
+  - reportingSecret
