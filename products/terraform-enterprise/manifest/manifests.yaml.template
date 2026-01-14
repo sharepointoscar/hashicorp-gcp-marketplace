@@ -210,6 +210,8 @@ spec:
             timeoutSeconds: 10
             failureThreshold: 5
           # Startup probe - allow time for initial startup
+          # TFE disk mode initializes embedded PostgreSQL, Redis, storage
+          # failureThreshold: 60 with periodSeconds: 10 = 10 min startup window
           startupProbe:
             httpGet:
               path: /_health_check
@@ -218,7 +220,7 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 30
+            failureThreshold: 60
 
         # Usage reporting sidecar (required for Marketplace billing)
         - name: ubbagent
