@@ -1,0 +1,95 @@
+# manifest/application.yaml.template
+# HashiCorp Terraform Cloud Agent - Application CRD
+
+apiVersion: app.k8s.io/v1beta1
+kind: Application
+metadata:
+  name: "$name"
+  namespace: "$namespace"
+  labels:
+    app.kubernetes.io/name: "$name"
+  annotations:
+    marketplace.cloud.google.com/deploy-info: '{"partner_id": "hashicorp", "product_id": "terraform-cloud-agent", "partner_name": "HashiCorp"}'
+spec:
+  descriptor:
+    type: "Terraform Cloud Agent"
+    version: "$TAG"
+    description: |-
+      HashiCorp Terraform Cloud Agent enables secure communication between
+      Terraform Cloud/Enterprise and your private infrastructure. The agent
+      runs inside your network and connects outbound to Terraform Cloud,
+      allowing Terraform runs to access private resources without exposing
+      them to the internet.
+
+      Features:
+      - Secure outbound-only connectivity to Terraform Cloud
+      - Execute Terraform runs within your private network
+      - Access private VCS, cloud credentials, and infrastructure
+      - Horizontal scaling with multiple agent replicas
+
+    maintainers:
+      - name: HashiCorp
+        url: https://www.hashicorp.com/
+
+    links:
+      - description: Documentation
+        url: https://developer.hashicorp.com/terraform/cloud-docs/agents
+      - description: Getting Started
+        url: https://developer.hashicorp.com/terraform/cloud-docs/agents/agents
+      - description: Support
+        url: https://support.hashicorp.com/
+
+    notes: |-
+      # Terraform Cloud Agent Deployment
+
+      Your Terraform Cloud Agent has been deployed successfully.
+
+      ## Verify Agent Connection
+
+      1. Check agent pod status:
+         ```
+         kubectl get pods -l app.kubernetes.io/name=$name -n $namespace
+         ```
+
+      2. View agent logs:
+         ```
+         kubectl logs -l app.kubernetes.io/name=$name -n $namespace -c tfc-agent
+         ```
+
+      3. Verify in Terraform Cloud:
+         - Navigate to your organization's Agent Pools
+         - The agent should appear as "idle" when connected
+
+      ## Configuration
+
+      - Agent Name Prefix: $agentName
+      - Replicas: $replicas
+
+      ## Scaling
+
+      To adjust the number of agents:
+      ```
+      kubectl scale deployment $name-tfc-agent --replicas=<count> -n $namespace
+      ```
+
+  info:
+    - name: Application Name
+      value: "$name"
+    - name: Namespace
+      value: "$namespace"
+    - name: Agent Replicas
+      value: "$replicas"
+
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "$name"
+
+  componentKinds:
+    - group: v1
+      kind: Secret
+    - group: v1
+      kind: ConfigMap
+    - group: apps/v1
+      kind: Deployment
+    - group: v1
+      kind: ServiceAccount

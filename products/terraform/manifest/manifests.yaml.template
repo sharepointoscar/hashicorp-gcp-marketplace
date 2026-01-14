@@ -1,0 +1,178 @@
+# manifest/manifests.yaml.template
+# HashiCorp Terraform Cloud Agent - Kubernetes Resources
+
+---
+# Secret for TFC Agent Token
+apiVersion: v1
+kind: Secret
+metadata:
+  name: $name-tfc-agent-token
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+type: Opaque
+stringData:
+  token: "$agentToken"
+
+---
+# ConfigMap for TFC Agent configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: $name-tfc-agent-config
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+data:
+  TFC_AGENT_NAME: "$agentName"
+  TFC_AGENT_LOG_LEVEL: "info"
+
+---
+# TFC Agent Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: $name-tfc-agent
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+    app.kubernetes.io/component: agent
+spec:
+  replicas: $replicas
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "$name"
+      app.kubernetes.io/component: agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: "$name"
+        app.kubernetes.io/component: agent
+    spec:
+      serviceAccountName: $tfcAgentServiceAccount
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: tfc-agent
+          image: $imageTfcAgent
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: TFC_AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: $name-tfc-agent-token
+                  key: token
+            - name: TFC_AGENT_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: $name-tfc-agent-config
+                  key: TFC_AGENT_NAME
+            - name: TFC_AGENT_LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: $name-tfc-agent-config
+                  key: TFC_AGENT_LOG_LEVEL
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          # Readiness probe - agent is ready when it can accept work
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "pgrep -f tfc-agent"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          # Liveness probe - agent process is running
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "pgrep -f tfc-agent"
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            failureThreshold: 3
+
+        # Usage reporting sidecar (required for Marketplace billing)
+        - name: ubbagent
+          image: $imageUbbagent
+          env:
+            - name: AGENT_CONFIG_FILE
+              value: /etc/ubbagent/config.yaml
+            - name: AGENT_LOCAL_PORT
+              value: "6080"
+            - name: AGENT_STATE_DIR
+              value: /var/lib/ubbagent
+            - name: AGENT_REPORT_DIR
+              value: /var/lib/ubbagent/reports
+            - name: AGENT_ENCODED_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: "$reportingSecret"
+                  key: reporting-key
+            - name: AGENT_CONSUMER_ID
+              valueFrom:
+                secretKeyRef:
+                  name: "$reportingSecret"
+                  key: consumer-id
+          volumeMounts:
+            - name: ubbagent-config
+              mountPath: /etc/ubbagent
+            - name: ubbagent-state
+              mountPath: /var/lib/ubbagent
+
+      volumes:
+        - name: ubbagent-config
+          configMap:
+            name: $name-ubbagent-config
+        - name: ubbagent-state
+          emptyDir: {}
+
+---
+# UBB Agent ConfigMap (Usage-Based Billing)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: $name-ubbagent-config
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+data:
+  config.yaml: |
+    identities:
+      - name: gcp
+        gcp:
+          encodedServiceAccountKey: $AGENT_ENCODED_KEY
+
+    metrics:
+      - name: terraform_agent_instance_time
+        type: int
+        endpoints:
+          - name: servicecontrol
+        passthrough: {}
+
+    endpoints:
+      - name: servicecontrol
+        servicecontrol:
+          identity: gcp
+          serviceName: terraform-cloud-agent.mp-hashicorp.appspot.com
+          consumerId: $AGENT_CONSUMER_ID
+
+    sources:
+      - name: instance_time_heartbeat
+        heartbeat:
+          metric: terraform_agent_instance_time
+          intervalSeconds: 3600
+          value:
+            int64Value: 1

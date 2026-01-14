@@ -1,0 +1,106 @@
+# schema.yaml
+# HashiCorp Terraform Cloud Agent - GCP Marketplace Schema
+
+x-google-marketplace:
+  schemaVersion: v2
+  applicationApiVersion: v1beta1
+
+  # MUST match the deployer image tag
+  publishedVersion: '1.15.0'
+  publishedVersionMetadata:
+    releaseNote: >-
+      Initial release of HashiCorp Terraform Cloud Agent on Google Cloud Marketplace.
+    releaseTypes:
+      - Feature
+    recommended: true
+
+  # Partner and product identifiers (must match Partner Portal)
+  partnerId: hashicorp
+  solutionId: terraform-cloud-agent
+
+  # All images must be declared here for security scanning
+  images:
+    '':  # Primary image (tfc-agent)
+      properties:
+        imageTfcAgent:
+          type: FULL
+    ubbagent:
+      properties:
+        imageUbbagent:
+          type: FULL
+
+  # Cluster requirements
+  clusterConstraints:
+    resources:
+      - replicas: 1
+        requests:
+          cpu: 250m
+          memory: 256Mi
+    k8sVersion: ">=1.21.0"
+
+# User-configurable properties (displayed in Marketplace UI)
+properties:
+  # Required: App instance name
+  name:
+    type: string
+    x-google-marketplace:
+      type: NAME
+
+  # Required: Kubernetes namespace
+  namespace:
+    type: string
+    x-google-marketplace:
+      type: NAMESPACE
+
+  # TFC Agent replicas
+  replicas:
+    type: integer
+    title: Agent Replicas
+    description: Number of Terraform Cloud Agent pods to deploy
+    default: 1
+    minimum: 1
+    maximum: 10
+
+  # Agent Pool Token (required for TFC connection)
+  agentToken:
+    type: string
+    title: Agent Pool Token
+    description: Terraform Cloud Agent Pool token for authentication
+    x-google-marketplace:
+      type: STRING
+
+  # Agent Name Prefix
+  agentName:
+    type: string
+    title: Agent Name Prefix
+    description: Prefix for agent names (agents will be named prefix-0, prefix-1, etc.)
+    default: "gcp-agent"
+
+  # Service account for TFC Agent
+  tfcAgentServiceAccount:
+    type: string
+    title: TFC Agent Service Account
+    x-google-marketplace:
+      type: SERVICE_ACCOUNT
+      serviceAccount:
+        description: Service account for Terraform Cloud Agent pods
+        roles:
+          - type: ClusterRole
+            rulesType: CUSTOM
+            rules:
+              - apiGroups: [""]
+                resources: ["secrets", "configmaps"]
+                verbs: ["get", "list", "watch"]
+
+  # Usage reporting secret (required for billing)
+  reportingSecret:
+    type: string
+    x-google-marketplace:
+      type: REPORTING_SECRET
+
+required:
+  - name
+  - namespace
+  - replicas
+  - agentToken
+  - reportingSecret

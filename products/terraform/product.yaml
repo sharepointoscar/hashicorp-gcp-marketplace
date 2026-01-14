@@ -1,0 +1,20 @@
+# products/terraform/product.yaml
+# Product metadata for HashiCorp Terraform Cloud Agent
+
+product:
+  id: terraform
+  name: HashiCorp Terraform Cloud Agent
+  version: "1.15.0"
+  partnerId: hashicorp
+  solutionId: terraform-cloud-agent
+
+marketplace:
+  serviceName: services/terraform-cloud-agent.endpoints.${PROJECT_ID}.cloud.goog
+
+images:
+  - name: tfc-agent
+    path: images/tfc-agent
+
+ubb:
+  metricName: terraform_agent_instance_time
+  serviceName: terraform-cloud-agent.mp-hashicorp.appspot.com

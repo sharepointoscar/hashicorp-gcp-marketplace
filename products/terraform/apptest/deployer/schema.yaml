@@ -1,0 +1,79 @@
+# apptest/deployer/schema.yaml
+# HashiCorp Terraform Cloud Agent - Test Schema
+
+x-google-marketplace:
+  schemaVersion: v2
+  applicationApiVersion: v1beta1
+  publishedVersion: '1.15.0'
+  publishedVersionMetadata:
+    releaseNote: >-
+      Test deployment for Terraform Cloud Agent verification.
+  partnerId: hashicorp
+  solutionId: terraform-cloud-agent
+
+  images:
+    '':
+      properties:
+        imageTfcAgent:
+          type: FULL
+    ubbagent:
+      properties:
+        imageUbbagent:
+          type: FULL
+    tester:
+      properties:
+        imageTester:
+          type: FULL
+
+properties:
+  name:
+    type: string
+    x-google-marketplace:
+      type: NAME
+
+  namespace:
+    type: string
+    x-google-marketplace:
+      type: NAMESPACE
+
+  replicas:
+    type: integer
+    default: 1
+
+  agentToken:
+    type: string
+    default: "test-token-for-verification"
+
+  agentName:
+    type: string
+    default: "test-agent"
+
+  tfcAgentServiceAccount:
+    type: string
+    x-google-marketplace:
+      type: SERVICE_ACCOUNT
+      serviceAccount:
+        description: Service account for test deployment
+        roles:
+          - type: ClusterRole
+            rulesType: CUSTOM
+            rules:
+              - apiGroups: [""]
+                resources: ["secrets", "configmaps"]
+                verbs: ["get", "list", "watch"]
+
+  reportingSecret:
+    type: string
+    x-google-marketplace:
+      type: REPORTING_SECRET
+
+  testerTimeout:
+    type: integer
+    default: 300
+
+required:
+  - name
+  - namespace
+  - replicas
+  - agentToken
+  - reportingSecret
