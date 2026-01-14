@@ -13,7 +13,7 @@ metadata:
 spec:
   descriptor:
     type: "Terraform Enterprise"
-    version: "v202501-1"
+    version: "1.0.0"
     description: |-
       HashiCorp Terraform Enterprise is a self-hosted distribution of
       Terraform Cloud, providing a private instance of the Terraform Cloud

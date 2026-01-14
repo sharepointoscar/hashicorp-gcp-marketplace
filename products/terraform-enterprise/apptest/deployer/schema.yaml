@@ -4,7 +4,7 @@
 x-google-marketplace:
   schemaVersion: v2
   applicationApiVersion: v1beta1
-  publishedVersion: 'v202501-1'
+  publishedVersion: '1.0.0'
   publishedVersionMetadata:
     releaseNote: >-
       Test deployment for Terraform Enterprise (Disk Mode) verification.

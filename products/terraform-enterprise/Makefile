@@ -5,8 +5,11 @@
 APP_ID := terraform-enterprise
 APP_IMAGES := tfe
 
-# TFE version
-TFE_VERSION ?= v202501-1
+# TFE upstream version (HashiCorp release format)
+TFE_UPSTREAM_VERSION ?= v202501-1
+
+# Marketplace version (semver format required by GCP)
+TFE_VERSION ?= 1.0.0
 
 # GCP Marketplace service name (from Partner Portal)
 MP_SERVICE_NAME ?= services/terraform-enterprise.endpoints.$(PROJECT_ID).cloud.goog
@@ -30,7 +33,7 @@ $(BUILD_DIR)/$(APP_ID)/tfe: images/tfe/Dockerfile | $(BUILD_DIR)
 	@mkdir -p $(BUILD_DIR)/$(APP_ID)
 	docker buildx build $(DOCKER_BUILD_FLAGS) \
 		$(ANNOTATION_FLAG) \
-		--build-arg TFE_VERSION="$(TFE_VERSION)" \
+		--build-arg TFE_VERSION="$(TFE_UPSTREAM_VERSION)" \
 		--tag "$(REGISTRY)/$(APP_ID):$(TAG)" \
 		-f images/tfe/Dockerfile \
 		--push images/tfe

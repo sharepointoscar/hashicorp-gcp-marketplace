@@ -6,7 +6,7 @@ x-google-marketplace:
   applicationApiVersion: v1beta1
 
   # MUST match the deployer image tag
-  publishedVersion: 'v202501-1'
+  publishedVersion: '1.0.0'
   publishedVersionMetadata:
     releaseNote: >-
       Initial release of HashiCorp Terraform Enterprise (Disk Mode) on Google Cloud Marketplace.
@@ -69,6 +69,7 @@ properties:
     description: >-
       Terraform Enterprise license key. This is required for both
       pulling the TFE container image and operating Terraform Enterprise.
+    default: "test-license-placeholder"
     x-google-marketplace:
       type: STRING
 
@@ -79,6 +80,7 @@ properties:
     description: >-
       Password used to encrypt sensitive data at rest. Must be at least
       16 characters. Store this securely - data cannot be recovered without it.
+    default: "test-encryption-password-minimum-16-chars"
     x-google-marketplace:
       type: STRING
 
@@ -89,6 +91,7 @@ properties:
     description: >-
       Base64-encoded TLS certificate for HTTPS. The certificate should
       match the TFE hostname and include any intermediate certificates.
+    default: "dGVzdC1jZXJ0aWZpY2F0ZS1wbGFjZWhvbGRlcg=="
     x-google-marketplace:
       type: STRING
 
@@ -98,6 +101,7 @@ properties:
     title: TLS Private Key (Base64)
     description: >-
       Base64-encoded TLS private key corresponding to the certificate.
+    default: "dGVzdC1wcml2YXRlLWtleS1wbGFjZWhvbGRlcg=="
     x-google-marketplace:
       type: STRING
 
