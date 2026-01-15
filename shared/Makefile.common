@@ -8,7 +8,8 @@ BUILD_DIR := .build
 # Docker build flags for GCP Marketplace compliance
 DOCKER_BUILD_FLAGS := --platform $(PLATFORM) \
     --provenance=false \
-    --sbom=false
+    --sbom=false \
+    --no-cache
 
 # Colors for output
 RED := \033[0;31m

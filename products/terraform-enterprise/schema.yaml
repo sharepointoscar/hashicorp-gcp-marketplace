@@ -1,168 +1,19 @@
-# schema.yaml
-# HashiCorp Terraform Enterprise (Disk Mode) - GCP Marketplace Schema
+# schema.yaml - Image URI mapping for GCP Marketplace Terraform K8s App
+# Reference: https://github.com/GoogleCloudPlatform/marketplace-tools/blob/master/docs/terraform-k8s-app/terraform-k8s-app-packaging-guide.md
+#
+# This maps Docker image URIs to Terraform variables.
+# GCP Marketplace automatically replaces these variables with the published image URIs.
 
-x-google-marketplace:
-  schemaVersion: v2
-  applicationApiVersion: v1beta1
-
-  # MUST match the deployer image tag
-  publishedVersion: '1.0.0'
-  publishedVersionMetadata:
-    releaseNote: >-
-      Initial release of HashiCorp Terraform Enterprise (Disk Mode) on Google Cloud Marketplace.
-      Disk mode provides an all-in-one deployment suitable for dev/test and PoC environments.
-    releaseTypes:
-      - Feature
-    recommended: true
-
-  # Partner and product identifiers (must match Partner Portal)
-  partnerId: hashicorp
-  solutionId: terraform-enterprise
-
-  # All images must be declared here for security scanning
-  images:
-    '':  # Primary image (tfe)
-      properties:
-        imageTfe:
-          type: FULL
-    ubbagent:
-      properties:
-        imageUbbagent:
-          type: FULL
-
-  # Cluster requirements for TFE Disk Mode
-  clusterConstraints:
-    resources:
-      - replicas: 1
-        requests:
-          cpu: 2000m
-          memory: 4Gi
-    k8sVersion: ">=1.25.0"
-
-# User-configurable properties (displayed in Marketplace UI)
-properties:
-  # Required: App instance name
-  name:
-    type: string
-    x-google-marketplace:
-      type: NAME
-
-  # Required: Kubernetes namespace
-  namespace:
-    type: string
-    x-google-marketplace:
-      type: NAMESPACE
-
-  # TFE Hostname (FQDN)
-  tfeHostname:
-    type: string
-    title: TFE Hostname
-    description: >-
-      Fully qualified domain name for accessing Terraform Enterprise.
-      This should be a DNS name that resolves to the load balancer IP.
-    default: "tfe.example.com"
-
-  # TFE License (required for image pull and TFE operation)
-  tfeLicense:
-    type: string
-    title: TFE License
-    description: >-
-      Terraform Enterprise license key. This is required for both
-      pulling the TFE container image and operating Terraform Enterprise.
-    default: "test-license-placeholder"
-    x-google-marketplace:
-      type: STRING
-
-  # Encryption password for data at rest
-  encryptionPassword:
-    type: string
-    title: Encryption Password
-    description: >-
-      Password used to encrypt sensitive data at rest. Must be at least
-      16 characters. Store this securely - data cannot be recovered without it.
-    default: "test-encryption-password-minimum-16-chars"
-    x-google-marketplace:
-      type: STRING
-
-  # TLS Certificate (base64 encoded)
-  tlsCertificate:
-    type: string
-    title: TLS Certificate (Base64)
-    description: >-
-      Base64-encoded TLS certificate for HTTPS. The certificate should
-      match the TFE hostname and include any intermediate certificates.
-    default: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURQRENDQWlTZ0F3SUJBZ0lVYVFnNFZHekVJS1h3eGRkOW5jTDVwRFZjZ2dBd0RRWUpLb1pJaHZjTkFRRUwKQlFBd0dqRVlNQllHQTFVRUF3d1BkR1psTG1WNFlXMXdiR1V1WTI5dE1CNFhEVEkyTURFeE5EQTBORGMwTjFvWApEVEkzTURFeE5EQTBORGMwTjFvd0dqRVlNQllHQTFVRUF3d1BkR1psTG1WNFlXMXdiR1V1WTI5dE1JSUJJakFOCkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQXBvc3JjNGU3OVlKbUEvMVJPMDZYQVc2ejVoVjcKc1hoa0ZqSjVuRFQ5R3hhR0RiTEVkVno0ekdUOTAwR2hackNPazZWZ1NsdGYzLzExK2xzV1dEVThJaXpXUEd3bwp1djltOVNPdGppSnlybEE2aHRXczBvd0pOY1pPME1ZQ09TVTlNQm14ZTgzbkk4SDBoMi9sWDdTbmZpR3V6WDM5Cm8vcEdRUjJTTzZzaVRMWjlIT29nSkYrTjluNE9WYzNXT1NWUEZjYVJQUGdzcHBaZGlFME9kWEVUVlA4cUduaTYKVEVqWkpweVJUOXJVNlhpcVdRaXZqV2kxV1NUcU9qdVpCNThhNFo0L1QwaXI1SDhpdkIxWS9hU3J1bE9JS1B2SwpERWk5L3ZnUDFuQ3Q3MllkbXZkdTAySVBsUTBOK2o5MFBFNXY4dmplQThtalVHbEREbFAvdlRZWXVRSURBUUFCCm8zb3dlREFkQmdOVkhRNEVGZ1FVdzJOcXBjWHVpc081VnZWanNKNThCUGtIcmZBd0h3WURWUjBqQkJnd0ZvQVUKdzJOcXBjWHVpc081VnZWanNKNThCUGtIcmZBd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBbEJnTlZIUkVFSGpBYwpnZzkwWm1VdVpYaGhiWEJzWlM1amIyMkNDV3h2WTJGc2FHOXpkREFOQmdrcWhraUc5dzBCQVFzRkFBT0NBUUVBCk5rODU0UWxDWEFoTVpzaldHWmhlWVZNOEpnWEE4aUVoUFZFbm84N0ZoR0hGRXB4TkpYOXpjcDVKM1k3VDJBczQKRGU1OHJZdWc3VVBOdmZJc0YwMU9OZjNnN1RiRFdCUXJFM2FnNjNUVC9oSFlBWldLYzM1TmJpcytESWpyRnA5KwpvanVvWnEvZERZeGYwL3lqU0R3VGx4a3hOS2ttRTQvTHRVTzQrcEhIZDh3OUduQlpvbU9iVWY5UEUwYkdZQnZMClhCZy9oV3dWcFlVNGNyVDArTDNRcTcvSFNSODBhSjhRMnZrRnhaV2t2UDQyQkNvOVgrTm5IYWxKR3o2dzhkeVoKbzh0VWRsdnI4MTU2aWdRWHczWHNvbmVDK0VMVk8zNkJ4R3d1RFhleWo4NTlnQVBvQW1nOUxWRGp5aE5WanJabgowMUhkTVVxa2h6b1VLS3FFRVpZeUZ3PT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo="
-    x-google-marketplace:
-      type: STRING
-
-  # TLS Private Key (base64 encoded)
-  tlsPrivateKey:
-    type: string
-    title: TLS Private Key (Base64)
-    description: >-
-      Base64-encoded TLS private key corresponding to the certificate.
-    default: "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2UUlCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktjd2dnU2pBZ0VBQW9JQkFRQ21peXR6aDd2MWdtWUQKL1ZFN1RwY0JiclBtRlh1eGVHUVdNbm1jTlAwYkZvWU5zc1IxWFBqTVpQM1RRYUptc0k2VHBXQktXMS9mL1hYNgpXeFpZTlR3aUxOWThiQ2k2LzJiMUk2Mk9Jbkt1VURxRzFhelNqQWsxeGs3UXhnSTVKVDB3R2JGN3plY2p3ZlNICmIrVmZ0S2QrSWE3TmZmMmora1pCSFpJN3F5Sk10bjBjNmlBa1g0MzJmZzVWemRZNUpVOFZ4cEU4K0N5bWxsMkkKVFE1MWNSTlUveW9hZUxwTVNOa21uSkZQMnRUcGVLcFpDSytOYUxWWkpPbzZPNWtIbnhyaG5qOVBTS3ZrZnlLOApIVmo5cEt1NlU0Z28rOG9NU0wzKytBL1djSzN2WmgyYTkyN1RZZytWRFEzNlAzUThUbS95K040RHlhTlFhVU1PClUvKzlOaGk1QWdNQkFBRUNnZ0VBQTJpVEw0TWZncXM5UVVMS1pkQjZZTE5GTENYbWFTMlJ2YTZQRUFpblR5N0MKSFFlb1VXRnpsOUVHZGdKQWx3OXhJbTV4Q2pTTHIxcFJEdEVWa1k4b3ljTFhLRExaV05iNnZnY1JuaHp3WDZKYQpKTjBxWVFqQ3EzNmw4cFZVQVhhTGdRcnhBTktvSUlUSythMTlsd0VpelA4TmV6eWFLaTJ4aVlvelFLL3lHREU2CjZJOEFzMnpaRy9MazVwem9YMGs5RE9ZL0w5UzhqWW5GalowREFVM2Q2aXNnaFl2dXZCcmdQdlNJa0VkTjBxUjcKUUVIbk40dk0zUFpvK2tvdXJLZWpUVSt0dXQzclBLc0g5Y2NIRjFHSkFZalhiV2tYaXBjbEtiY2xHazFxQnh4eQpwazNsUFM5ckhMTkxQL05WajArSzZVUmMwd1VBZ1E5T1dYdlpQYklGRFFLQmdRRFc5U09vUzlRL2tyRVprelpJCmZ0ditKWkJGSDNPT1E4bFh1SmZFa2lZZVJwWURuVHRrb2pydnlESVJ5bFpyWWRuYzFxekFxZm9LdGtpVVJsUncKSm1FNVczQkRzVWZ1K01PU2NnR01Dd2ZhN2d6eSsrdm81UzNyK09FUEw5d2F1RG1RT3RmMkFFcktOUkdETlc2TQpvU0pPTmlsNTRiUGVxYnBvdGwwZEpYWEZRd0tCZ1FER1Y1M2Z5S2NEOXg0dXkxcUpCemt4T3A1aDI5SmN5VUpHCnIzUXJKME9VdUEwdjJXVERFMHNjZUZ4YmJoZ0N2MUkwcmNxbXhCbTFwSEhLdFZNSDFsdUcrODhCK2FFRHdUcDUKemVvZXJmSkpkcmVOaFUzNUp5TW9CUnFpNkNOYnZQV0ZUQ3RXaVM4TGNIdVhyR2tkYWtQV2pBK1Z4QnJ1T0VySwpZT3loa1pnTVV3S0JnSDdQK2V4RVovL2xRNU9wOUdGS2JmQitLcUdNejNoRFoxblg3YmtxMjFBTEpsOFZlRCtECk1hL1o5Q2ZvclprR0RpZ3BnWnJiN0VZN2lZL24rZEo3NGVtYmx4eG9UdDZkWll0VXRMTHdvdjYyWjI5RnpjUUUKeUZXbzZ1VXh2L0VIYy9ZeHNNeFJHYzQzQnBEWWlkSnZFVFVBNFBFbGhSNjhGTnZIa2lFcXcxTFBBb0dCQUp2NQp0d3VQTGRodWMydjFPME5iVE55cjduV2lldkhBeTcvdXBucHhMREk5OHhEWDh1ZDl1cW11OVdKcFY3U0JaRkpOCkFYclg2Q2Z5SkJKM09jNkdBZ0JLOGVYcHUzZktjd1Bxck54bmlvdS9NbVcybVRVQVZDTmFzREhBUUY0YVlUSHMKVG9DRTdWd2ZudklPQWJQQ0o0c0hKaEp1MzRiSytmWGc5dld3RzFSRkFvR0FWNTRodU90MmZ5M2JIRkFOUmFuUgpaMk5pblp3b1ZlQitqWUtWcmxCNnRlc0ZGZWVSeTltTVY5VWYrWWtwRGhoNXpqRUdJNXZneXdaWVNHc3A5QTEwCjVkdFpoOHhocXlwSkNGVDBBV0Ywc0FCTTJmMlRwd1QvbFkzcUJ5cmpPNGdWdUJTNzhRSldFWmJJaWtzSmlFR0MKOEJHYUl6azVrZXozSC9ISEdzTGQ2WWc9Ci0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0K"
-    x-google-marketplace:
-      type: STRING
-
-  # Storage size for disk mode
-  storageSize:
-    type: string
-    title: Storage Size
-    description: >-
-      Size of the persistent volume for TFE data storage.
-      Recommended minimum is 50Gi for production use.
-    default: "50Gi"
-
-  # TFE HTTP Port
-  tfeHttpPort:
-    type: integer
-    title: HTTP Port
-    description: HTTP port for TFE (used for health checks and redirects)
-    default: 80
-    minimum: 1
-    maximum: 65535
-
-  # TFE HTTPS Port
-  tfeHttpsPort:
-    type: integer
-    title: HTTPS Port
-    description: HTTPS port for TFE
-    default: 443
-    minimum: 1
-    maximum: 65535
-
-  # Service account for TFE
-  tfeServiceAccount:
-    type: string
-    title: TFE Service Account
-    x-google-marketplace:
-      type: SERVICE_ACCOUNT
-      serviceAccount:
-        description: Service account for Terraform Enterprise pods
-        roles:
-          - type: ClusterRole
-            rulesType: CUSTOM
-            rules:
-              - apiGroups: [""]
-                resources: ["secrets", "configmaps", "persistentvolumeclaims"]
-                verbs: ["get", "list", "watch", "create", "update", "patch"]
-              - apiGroups: [""]
-                resources: ["pods", "pods/exec"]
-                verbs: ["get", "list", "watch", "create", "delete"]
-
-  # Usage reporting secret (required for billing)
-  reportingSecret:
-    type: string
-    x-google-marketplace:
-      type: REPORTING_SECRET
-
-required:
-  - name
-  - namespace
-  - tfeHostname
-  - tfeLicense
-  - encryptionPassword
-  - tlsCertificate
-  - tlsPrivateKey
-  - reportingSecret
+images:
+  tfe:
+    variables:
+      tfe_image_repo:
+        type: REPO_WITH_REGISTRY_WITH_NAME
+      tfe_image_tag:
+        type: TAG
+  ubbagent:
+    variables:
+      ubbagent_image_repo:
+        type: REPO_WITH_REGISTRY_WITH_NAME
+      ubbagent_image_tag:
+        type: TAG

@@ -4,31 +4,40 @@ This monorepo contains Google Cloud Marketplace packages for HashiCorp products.
 
 ## Products
 
-| Product | Status | Description |
-|---------|--------|-------------|
-| [Vault](products/vault/) | Active | Secrets management and data protection |
-| [Consul](products/consul/) | Planned | Service mesh and service discovery |
-| [Nomad](products/nomad/) | Planned | Workload orchestration |
-| [Terraform](products/terraform/) | Planned | Terraform Cloud Agent |
+| Product | Type | Status | Description |
+|---------|------|--------|-------------|
+| [TFE (Terraform K8s App)](products/terraform-enterprise-tf/) | Terraform K8s App | Active | Full-stack deployment with Infrastructure Manager |
+| [TFE (Click-to-Deploy)](products/terraform-enterprise/) | Click-to-Deploy | Active | Requires pre-provisioned infrastructure |
+| [Vault](products/vault/) | Click-to-Deploy | Active | Secrets management with Raft storage |
+| [Consul](products/consul/) | Click-to-Deploy | Planned | Service mesh and service discovery |
+| [Nomad](products/nomad/) | Click-to-Deploy | Planned | Workload orchestration |
+| [Terraform Cloud Agent](products/terraform/) | Click-to-Deploy | Planned | Terraform Cloud Agent |
+
+### Deployment Types
+
+- **Terraform K8s App**: Uses GCP Infrastructure Manager to provision ALL infrastructure (VPC, GKE, Cloud SQL, Redis, GCS) and deploy via Helm. Best for marketplace since it's self-contained.
+- **Click-to-Deploy**: Requires pre-provisioned infrastructure. Customer must set up Cloud SQL, Redis, etc. before deployment.
 
 ## Repository Structure
 
 ```
 hashicorp-gcp-marketplace/
-├── Makefile                    # Root orchestration
-├── shared/                     # Shared infrastructure
-│   ├── Makefile.common         # Common make targets
-│   ├── Makefile.product        # Product build patterns
-│   ├── scripts/                # Validation and cluster scripts
-│   └── templates/              # Shared templates
-├── products/                   # Product-specific code
+├── Makefile                       # Root orchestration
+├── shared/                        # Shared infrastructure
+│   ├── Makefile.common            # Common make targets
+│   ├── Makefile.product           # Product build patterns
+│   ├── scripts/                   # Validation and cluster scripts
+│   └── templates/                 # Shared templates
+├── products/                      # Product-specific code
+│   ├── terraform-enterprise-tf/   # TFE Terraform K8s App (Active)
+│   ├── terraform-enterprise/      # TFE Click-to-Deploy (Active)
 │   ├── vault/
 │   ├── consul/
 │   ├── nomad/
 │   └── terraform/
 ├── vendor/
-│   └── marketplace-tools/      # Google's marketplace toolkit
-└── docs/                       # Documentation
+│   └── marketplace-tools/         # Google's marketplace toolkit
+└── docs/                          # Documentation
 ```
 
 ## Prerequisites
@@ -65,15 +74,27 @@ make PRODUCT=vault REGISTRY=$REGISTRY TAG=$TAG build
 make PRODUCT=consul REGISTRY=$REGISTRY TAG=$TAG build
 ```
 
-### Validate a Product
+### Validate a Product (Standard Workflow)
+
+**Always use the shared validation script** for all products:
 
 ```bash
-# Run full validation for Vault
-make PRODUCT=vault REGISTRY=$REGISTRY TAG=$TAG validate
+# Full validation pipeline (builds, schema check, install, verify, vuln scan)
+REGISTRY=$REGISTRY TAG=$TAG ./shared/scripts/validate-marketplace.sh <product>
 
-# Or use the script directly
-./shared/scripts/validate-marketplace.sh vault
+# Example: Terraform Enterprise
+REGISTRY=$REGISTRY TAG=1.22.1 ./shared/scripts/validate-marketplace.sh terraform-enterprise
+
+# Keep deployment for debugging
+REGISTRY=$REGISTRY TAG=$TAG ./shared/scripts/validate-marketplace.sh <product> --keep-deployment
 ```
+
+The script runs the complete pipeline:
+1. Prerequisites and mpdev doctor
+2. Build all images
+3. Schema verification
+4. mpdev install + mpdev verify
+5. Vulnerability scan check
 
 ### Build All Products
 
@@ -95,10 +116,12 @@ Each product uses independent release tags:
 
 | Product | Tag Pattern | Example |
 |---------|-------------|---------|
+| TFE Terraform K8s App | `tfe-tf-v*` | `tfe-tf-v1.0.0` |
+| TFE Click-to-Deploy | `tfe-v*` | `tfe-v1.0.2` |
 | Vault | `vault-v*` | `vault-v1.21.0` |
 | Consul | `consul-v*` | `consul-v1.18.0` |
 | Nomad | `nomad-v*` | `nomad-v1.7.0` |
-| Terraform | `terraform-v*` | `terraform-v1.0.0` |
+| Terraform Cloud Agent | `terraform-v*` | `terraform-v1.0.0` |
 
 ## License
 

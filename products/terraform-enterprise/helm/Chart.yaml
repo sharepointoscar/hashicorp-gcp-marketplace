@@ -1,0 +1,11 @@
+# HashiCorp Terraform Enterprise - GCP Marketplace Helm Chart
+# Based on official HashiCorp terraform-enterprise-helm chart
+# SPDX-License-Identifier: MPL-2.0
+
+apiVersion: v2
+name: terraform-enterprise-chart
+kubeVersion: ">=1.25.0-0"
+description: HashiCorp Terraform Enterprise for GCP Marketplace
+type: application
+version: 1.1.3
+appVersion: "1.1.3"
