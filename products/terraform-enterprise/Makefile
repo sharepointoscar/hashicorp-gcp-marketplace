@@ -180,13 +180,6 @@ ar/clean:
 	gcloud artifacts docker images delete $(AR_REGISTRY)/ubbagent:$(VERSION) --quiet 2>/dev/null || true
 	gcloud artifacts docker images delete $(AR_REGISTRY)/$(CHART_NAME):$(VERSION) --quiet 2>/dev/null || true
 
-# Legacy GCR cleanup (from click-to-deploy)
-.PHONY: gcr/clean
-gcr/clean:
-	$(call print_notice,Cleaning all images from GCR...)
-	REGISTRY=$(REGISTRY) ./scripts/clean-gcr.sh
-	$(call print_success,GCR cleaned)
-
 #=============================================================================
 # INFO
 #=============================================================================

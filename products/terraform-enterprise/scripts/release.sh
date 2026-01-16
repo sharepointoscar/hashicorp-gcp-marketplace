@@ -1,11 +1,12 @@
 #!/bin/bash
 # scripts/release.sh
-# Build, clean, and release all TFE GCP Marketplace artifacts
-# Usage: ./scripts/release.sh [--clean] [--build] [--info]
+# Build, clean, release, and deploy TFE GCP Marketplace artifacts
+# Usage: ./scripts/release.sh [--clean] [--build] [--info] [--deploy]
 #   --clean  : Delete all artifacts from AR and GCS
 #   --build  : Build and push all artifacts (default if no flags)
 #   --info   : Display Partner Portal configuration info
-#   --all    : Clean, build, and display info
+#   --deploy : Deploy to GKE cluster using terraform apply
+#   --all    : Clean, build, deploy, and display info
 
 set -e
 
@@ -90,6 +91,10 @@ build_artifacts() {
     echo "=== BUILDING ALL ARTIFACTS ==="
     echo ""
 
+    # Clear stale build markers to force rebuild
+    echo "Clearing stale build markers..."
+    rm -f .build/tfe .build/ubbagent
+
     # Build TFE image
     echo "Building TFE image..."
     make .build/tfe
@@ -116,6 +121,76 @@ build_artifacts() {
 
     echo ""
     echo "=== BUILD COMPLETE ==="
+}
+
+deploy_to_cluster() {
+    echo "=== DEPLOYING TO GKE CLUSTER ==="
+    echo ""
+    echo "Cluster:      vault-mp-test (us-central1)"
+    echo "Namespace:    terraform-enterprise"
+    echo "TFE Hostname: tfe.example.com"
+    echo ""
+    echo "Using marketplace_test.tfvars (contains all required values)"
+    echo ""
+
+    # Initialize Terraform
+    echo "Initializing Terraform..."
+    terraform init
+
+    # Plan
+    echo ""
+    echo "Running Terraform Plan..."
+    terraform plan \
+        -var-file=marketplace_test.tfvars \
+        -var="project_id=ibm-software-mp-project-test" \
+        -var="tfe_image_repo=$AR_REGISTRY/tfe" \
+        -var="tfe_image_tag=$VERSION" \
+        -var="ubbagent_image_repo=$AR_REGISTRY/ubbagent" \
+        -var="ubbagent_image_tag=$VERSION" \
+        -out=tfplan
+
+    echo ""
+    read -p "Apply this plan? (yes/no): " CONFIRM
+
+    if [ "$CONFIRM" != "yes" ]; then
+        echo "Deployment aborted."
+        return 1
+    fi
+
+    # Apply
+    echo ""
+    echo "Applying Terraform..."
+    terraform apply tfplan
+
+    echo ""
+    echo "=== DEPLOYMENT COMPLETE ==="
+    echo ""
+
+    # Get LoadBalancer IP
+    echo "Waiting for LoadBalancer IP..."
+    LB_IP=""
+    for i in {1..30}; do
+        LB_IP=$(kubectl get svc -n terraform-enterprise -o jsonpath='{.items[?(@.spec.type=="LoadBalancer")].status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+        if [ -n "$LB_IP" ]; then
+            break
+        fi
+        sleep 5
+    done
+
+    if [ -n "$LB_IP" ]; then
+        echo ""
+        echo "=== LOADBALANCER ==="
+        echo "IP: $LB_IP"
+        echo ""
+        echo "Health check:"
+        echo "  curl -k https://$LB_IP/_health_check"
+        echo ""
+        echo "Testing health..."
+        curl -sk "https://$LB_IP/_health_check" || echo "(not ready yet)"
+    else
+        echo "LoadBalancer IP not yet assigned. Check manually:"
+        echo "  kubectl get svc -n terraform-enterprise"
+    fi
 }
 
 display_info() {
@@ -182,8 +257,9 @@ show_usage() {
     echo "Options:"
     echo "  --clean    Delete all artifacts from AR and GCS"
     echo "  --build    Build and push all artifacts"
+    echo "  --deploy   Deploy to GKE cluster using terraform apply"
     echo "  --info     Display Partner Portal configuration info"
-    echo "  --all      Clean, build, and display info"
+    echo "  --all      Clean, build, deploy, and display info"
     echo "  --help     Show this help message"
     echo ""
     echo "If no options provided, defaults to --build --info"
@@ -195,6 +271,7 @@ show_usage() {
 
 DO_CLEAN=false
 DO_BUILD=false
+DO_DEPLOY=false
 DO_INFO=false
 
 # Parse arguments
@@ -213,6 +290,10 @@ while [[ $# -gt 0 ]]; do
             DO_BUILD=true
             shift
             ;;
+        --deploy)
+            DO_DEPLOY=true
+            shift
+            ;;
         --info)
             DO_INFO=true
             shift
@@ -220,6 +301,7 @@ while [[ $# -gt 0 ]]; do
         --all)
             DO_CLEAN=true
             DO_BUILD=true
+            DO_DEPLOY=true
             DO_INFO=true
             shift
             ;;
@@ -247,6 +329,10 @@ fi
 
 if $DO_BUILD; then
     build_artifacts
+fi
+
+if $DO_DEPLOY; then
+    deploy_to_cluster
 fi
 
 if $DO_INFO; then

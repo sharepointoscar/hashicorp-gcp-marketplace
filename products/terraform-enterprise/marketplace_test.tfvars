@@ -8,7 +8,7 @@
 
 # GKE Cluster (must exist for validation)
 cluster_name     = "vault-mp-test"
-cluster_location = "us-central1"
+cluster_location = "us-central1-a"
 
 # Deployment configuration
 namespace     = "terraform-enterprise"

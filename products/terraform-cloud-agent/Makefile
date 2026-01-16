@@ -1,8 +1,8 @@
-# products/terraform/Makefile
+# products/terraform-cloud-agent/Makefile
 # HashiCorp Terraform Cloud Agent - GCP Marketplace
 
 # Product configuration
-APP_ID := terraform
+APP_ID := terraform-cloud-agent
 APP_IMAGES := tfc-agent
 
 # GCP Marketplace service name (from Partner Portal)

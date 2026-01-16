@@ -2,8 +2,8 @@
 # HashiCorp Terraform Enterprise - GCP Marketplace
 
 terraform {
-  # GCP Marketplace validation uses Terraform 1.5.7
-  required_version = ">= 1.5"
+  # GCP Infrastructure Manager supports: 1.5.7, 1.4.7, 1.3.10
+  required_version = ">= 1.3"
 
   required_providers {
     google = {
