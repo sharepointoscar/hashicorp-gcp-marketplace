@@ -8,7 +8,8 @@ MINOR_VERSION := $(shell echo $(VERSION) | cut -d. -f1,2)
 CHART_NAME := terraform-enterprise-chart
 
 # TFE upstream version (update to latest for CVE fixes)
-TFE_UPSTREAM_VERSION ?= v202502-1
+# Note: TFE switched to semantic versioning after v202507-1 (1.0.0+)
+TFE_UPSTREAM_VERSION ?= 1.1.3
 
 # Artifact Registry (MUST be us-docker.pkg.dev for Terraform K8s apps)
 AR_REGISTRY := us-docker.pkg.dev/ibm-software-mp-project-test/tfe-marketplace
