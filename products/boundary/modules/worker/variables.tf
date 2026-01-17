@@ -135,6 +135,12 @@ variable "cidr_ingress_9202_allow" {
 #-----------------------------------------------------------------------------------
 # Encryption Keys (KMS)
 #-----------------------------------------------------------------------------------
+variable "use_kms" {
+  type        = bool
+  description = "Whether to use KMS for worker authentication. Set to true when key_ring_name and key_name are provided."
+  default     = false
+}
+
 variable "key_ring_location" {
   type        = string
   description = "Location of KMS key ring. If not set, the region of the Boundary deployment will be used."

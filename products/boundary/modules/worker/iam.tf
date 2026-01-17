@@ -2,14 +2,14 @@
 # SPDX-License-Identifier: MPL-2.0
 
 data "google_kms_key_ring" "key_ring" {
-  count = var.key_ring_name != null ? 1 : 0
+  count = var.use_kms ? 1 : 0
 
   name     = var.key_ring_name
   location = var.key_ring_location != null || data.google_client_config.default.region != null ? var.key_ring_location != null ? var.key_ring_location : data.google_client_config.default.region : var.region
 }
 
 data "google_kms_crypto_key" "key" {
-  count = var.key_name != null ? 1 : 0
+  count = var.use_kms ? 1 : 0
 
   name     = var.key_name
   key_ring = data.google_kms_key_ring.key_ring[0].id
@@ -32,8 +32,7 @@ resource "google_service_account_key" "boundary" {
 # KMS Manager
 #-----------------------------------------------------------------------------------
 resource "google_kms_crypto_key_iam_member" "worker_operator" {
-  count = var.key_name != null ? 1 : 0
-
+  count = var.use_kms ? 1 : 0
 
   crypto_key_id = data.google_kms_crypto_key.key[0].id
   role          = "roles/cloudkms.cryptoOperator"
@@ -41,7 +40,7 @@ resource "google_kms_crypto_key_iam_member" "worker_operator" {
 }
 
 resource "google_kms_crypto_key_iam_member" "worker_viewer" {
-  count = var.key_name != null ? 1 : 0
+  count = var.use_kms ? 1 : 0
 
   crypto_key_id = data.google_kms_crypto_key.key[0].id
   role          = "roles/cloudkms.viewer"

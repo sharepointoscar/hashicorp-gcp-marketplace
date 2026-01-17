@@ -109,6 +109,7 @@ module "ingress_worker" {
   cidr_ingress_9202_allow = var.cidr_ingress_worker_allow
 
   # KMS - use controller's key ring
+  use_kms           = true
   key_ring_location = var.region
   key_ring_name     = module.controller.created_boundary_keyring_name
   key_name          = module.controller.created_boundary_worker_key_name
@@ -158,6 +159,7 @@ module "egress_worker" {
   cidr_ingress_9202_allow = null  # No external access needed
 
   # KMS - use controller's key ring
+  use_kms           = true
   key_ring_location = var.region
   key_ring_name     = module.controller.created_boundary_keyring_name
   key_name          = module.controller.created_boundary_worker_key_name
