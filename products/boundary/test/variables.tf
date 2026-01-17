@@ -21,24 +21,31 @@ variable "boundary_fqdn" {
   description = "FQDN for Boundary."
 }
 
-variable "boundary_license_secret_id" {
+variable "license_file_path" {
   type        = string
-  description = "Secret Manager secret ID for Boundary license."
+  description = "Path to Boundary Enterprise license file (.hclic)."
 }
 
-variable "boundary_tls_cert_secret_id" {
+#------------------------------------------------------------------------------
+# TLS Configuration (optional - self-signed if not provided)
+#------------------------------------------------------------------------------
+
+variable "tls_cert_path" {
   type        = string
-  description = "Secret Manager secret ID for TLS certificate."
+  description = "Path to TLS certificate file. If null, self-signed cert is generated."
+  default     = null
 }
 
-variable "boundary_tls_privkey_secret_id" {
+variable "tls_key_path" {
   type        = string
-  description = "Secret Manager secret ID for TLS private key."
+  description = "Path to TLS private key file. If null, self-signed key is generated."
+  default     = null
 }
 
-variable "boundary_database_password_secret_id" {
+variable "tls_ca_bundle_path" {
   type        = string
-  description = "Secret Manager secret ID for database password."
+  description = "Path to CA bundle file. Optional."
+  default     = null
 }
 
 #------------------------------------------------------------------------------
@@ -56,7 +63,7 @@ variable "controller_subnet_name" {
 }
 
 #------------------------------------------------------------------------------
-# Optional Variables
+# Boundary Configuration
 #------------------------------------------------------------------------------
 
 variable "boundary_version" {
@@ -69,6 +76,12 @@ variable "controller_instance_count" {
   type        = number
   description = "Number of controller instances."
   default     = 1
+}
+
+variable "controller_machine_type" {
+  type        = string
+  description = "Machine type for controller instances."
+  default     = "n2-standard-4"
 }
 
 variable "ingress_worker_instance_count" {
@@ -95,8 +108,18 @@ variable "deploy_egress_worker" {
   default     = false
 }
 
+#------------------------------------------------------------------------------
+# Naming
+#------------------------------------------------------------------------------
+
+variable "friendly_name_prefix" {
+  type        = string
+  description = "Prefix for resource names."
+  default     = "bnd"
+}
+
 variable "goog_cm_deployment_name" {
   type        = string
   description = "GCP Marketplace deployment name."
-  default     = "boundary-test"
+  default     = ""
 }

@@ -53,65 +53,59 @@ Boundary Enterprise provides secure remote access to infrastructure without expo
 
 ## Quick Start
 
-### 1. Clone and Configure
+### 1. Place Your License File
 
 ```bash
 cd products/boundary
 
-# Place your license file (gitignored)
+# Place your Boundary Enterprise license file (gitignored)
 cp /path/to/your/boundary.hclic .
 ```
 
-### 2. Set Required Variables
+### 2. Configure Variables
 
-Create a `terraform.tfvars` file:
+```bash
+cd test
+
+# Copy the example and edit with your values
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Edit `terraform.tfvars`:
 
 ```hcl
-# Required
-project_id              = "your-gcp-project-id"
-boundary_fqdn           = "boundary.example.com"
-boundary_license_secret = "projects/PROJECT/secrets/boundary-license/versions/latest"
+project_id        = "your-gcp-project-id"
+region            = "us-central1"
+boundary_fqdn     = "boundary.example.com"
+license_file_path = "../boundary.hclic"
 
-# Network
-vpc_name    = "boundary-vpc"
-subnet_name = "boundary-subnet"
-region      = "us-central1"
-
-# Optional: Customize sizing
-controller_instance_count = 3
-worker_instance_count     = 2
-controller_machine_type   = "e2-medium"
-worker_machine_type       = "e2-medium"
+vpc_name               = "default"
+controller_subnet_name = "default"
 ```
 
-### 3. Store License in Secret Manager
+### 3. Deploy
 
 ```bash
-# Create secret
-gcloud secrets create boundary-license \
-  --project=YOUR_PROJECT_ID \
-  --replication-policy="automatic"
+cd products/boundary/test
 
-# Add license content
-gcloud secrets versions add boundary-license \
-  --project=YOUR_PROJECT_ID \
-  --data-file=boundary.hclic
-```
-
-### 4. Deploy
-
-```bash
 # Initialize Terraform
 terraform init
 
 # Review the plan
 terraform plan
 
-# Apply
+# Deploy (creates secrets, TLS certs, and full Boundary deployment)
 terraform apply
 ```
 
-### 5. Access Boundary
+The deployment automatically:
+- Creates Secret Manager secrets for license, TLS certificates, and database password
+- Generates self-signed TLS certificates (or uses provided ones)
+- Deploys Boundary controllers and workers
+- Creates Cloud SQL PostgreSQL database
+- Sets up Cloud KMS encryption keys
+
+### 4. Access Boundary
 
 After deployment:
 
@@ -119,11 +113,13 @@ After deployment:
 # Get the Boundary URL
 terraform output boundary_url
 
-# Get initial admin credentials (stored in Secret Manager)
-gcloud secrets versions access latest \
-  --secret=boundary-admin-password \
-  --project=YOUR_PROJECT_ID
+# Get the controller load balancer IP
+terraform output controller_load_balancer_ip
 ```
+
+Configure DNS to point `boundary_fqdn` to the load balancer IP, then access:
+- UI: `https://boundary.example.com:9200`
+- API: `https://boundary.example.com:9200`
 
 ## Configuration
 
@@ -132,89 +128,33 @@ gcloud secrets versions access latest \
 | Variable | Description |
 |----------|-------------|
 | `project_id` | GCP project ID |
+| `region` | GCP region (e.g., `us-central1`) |
 | `boundary_fqdn` | Fully qualified domain name for Boundary |
-| `boundary_license_secret` | Secret Manager path to license |
+| `license_file_path` | Path to Boundary Enterprise license file |
 | `vpc_name` | VPC network name |
-| `subnet_name` | Subnet name |
-| `region` | GCP region |
+| `controller_subnet_name` | Subnet name for controllers |
 
 ### Optional Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `boundary_version` | `0.21.0+ent` | Boundary Enterprise version |
-| `controller_instance_count` | `3` | Number of controller instances |
-| `worker_instance_count` | `2` | Number of worker instances |
-| `controller_machine_type` | `e2-medium` | Controller VM machine type |
-| `worker_machine_type` | `e2-medium` | Worker VM machine type |
-| `enable_session_recording` | `false` | Enable BSR session recording |
-| `db_instance_tier` | `db-custom-2-4096` | Cloud SQL instance tier |
+| `controller_instance_count` | `1` | Number of controller instances |
+| `controller_machine_type` | `n2-standard-4` | Controller VM machine type |
+| `deploy_ingress_worker` | `true` | Deploy ingress worker |
+| `deploy_egress_worker` | `false` | Deploy egress worker |
+| `ingress_worker_instance_count` | `1` | Number of ingress workers |
+| `egress_worker_instance_count` | `1` | Number of egress workers |
+| `tls_cert_path` | `null` | Path to TLS cert (null = self-signed) |
+| `tls_key_path` | `null` | Path to TLS key (null = self-signed) |
 
 ## Outputs
 
 | Output | Description |
 |--------|-------------|
 | `boundary_url` | Boundary API/UI URL |
-| `controller_ips` | Controller instance IPs |
-| `worker_ips` | Worker instance IPs |
-| `database_connection` | Cloud SQL connection string |
-
-## Testing
-
-### Validate Configuration
-
-```bash
-# Validate Terraform
-terraform validate
-
-# Validate Marketplace metadata (requires CFT CLI)
-cft blueprint metadata -p . -v
-```
-
-### Test Deployment
-
-```bash
-# Use test configuration
-terraform plan -var-file=examples/marketplace_test/marketplace_test.tfvars
-
-# Health check after deployment
-curl -k https://<BOUNDARY_FQDN>:9200/health
-```
-
-## Troubleshooting
-
-### Check Controller Logs
-
-```bash
-# SSH to controller (via IAP)
-gcloud compute ssh boundary-controller-0 \
-  --project=YOUR_PROJECT \
-  --zone=us-central1-a \
-  --tunnel-through-iap
-
-# View logs
-sudo journalctl -u boundary -f
-```
-
-### Check Worker Logs
-
-```bash
-gcloud compute ssh boundary-worker-0 \
-  --project=YOUR_PROJECT \
-  --zone=us-central1-a \
-  --tunnel-through-iap
-
-sudo journalctl -u boundary -f
-```
-
-### Common Issues
-
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| Controller not starting | Invalid license | Verify license in Secret Manager |
-| Workers not connecting | Network/firewall | Check firewall rules for port 9201 |
-| Database connection failed | Cloud SQL not ready | Wait for Cloud SQL provisioning |
-| Health check failing | Controllers initializing | Wait 5-10 minutes after deployment |
+| `controller_load_balancer_ip` | Controller load balancer IP |
+| `post_deployment_instructions` | Next steps after deployment |
 
 ## File Structure
 
@@ -235,21 +175,60 @@ products/boundary/
 │
 ├── modules/
 │   ├── controller/           # Controller HVD module
-│   └── worker/               # Worker HVD module
+│   ├── worker/               # Worker HVD module
+│   └── prerequisites/        # Secrets and TLS automation
 │
-└── examples/
-    └── marketplace_test/
-        ├── main.tf
-        └── marketplace_test.tfvars
+└── test/
+    ├── main.tf               # Test deployment
+    ├── variables.tf
+    ├── outputs.tf
+    ├── terraform.tfvars      # Your config (gitignored)
+    └── terraform.tfvars.example
 ```
+
+## Troubleshooting
+
+### Check Controller Logs
+
+```bash
+# SSH to controller (via IAP)
+gcloud compute ssh <controller-instance> \
+  --project=YOUR_PROJECT \
+  --zone=us-central1-a \
+  --tunnel-through-iap
+
+# View logs
+sudo journalctl -u boundary -f
+```
+
+### Check Worker Logs
+
+```bash
+gcloud compute ssh <worker-instance> \
+  --project=YOUR_PROJECT \
+  --zone=us-central1-a \
+  --tunnel-through-iap
+
+sudo journalctl -u boundary -f
+```
+
+### Common Issues
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Controller not starting | Invalid license | Verify license file path |
+| Workers not connecting | Network/firewall | Check firewall rules for port 9201 |
+| Database connection failed | Cloud SQL not ready | Wait for Cloud SQL provisioning |
+| Health check failing | Controllers initializing | Wait 5-10 minutes after deployment |
 
 ## Security Considerations
 
 1. **License Storage**: License stored in GCP Secret Manager, not in code
-2. **TLS**: All communication encrypted with TLS
+2. **TLS**: All communication encrypted with TLS (self-signed or provided)
 3. **KMS**: Encryption keys managed by Cloud KMS
 4. **IAM**: Least-privilege service accounts for each component
 5. **Network**: Controllers and workers isolated in appropriate subnets
+6. **Database Password**: Randomly generated and stored in Secret Manager
 
 ## Support
 
