@@ -1,0 +1,40 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
+# Copy this file to marketplace_test.tfvars and fill in your values
+# terraform plan -var-file=marketplace_test.tfvars
+
+#------------------------------------------------------------------------------
+# Required - Update these values
+#------------------------------------------------------------------------------
+
+project_id = "your-gcp-project-id"
+region     = "us-central1"
+
+# FQDN must resolve to the load balancer IP after deployment
+boundary_fqdn = "boundary.example.com"
+
+# Create secrets in Secret Manager first:
+# gcloud secrets create boundary-license --data-file=boundary.hclic
+# gcloud secrets create boundary-tls-cert --data-file=tls.crt
+# gcloud secrets create boundary-tls-key --data-file=tls.key
+boundary_license_secret_id     = "boundary-license"
+boundary_tls_cert_secret_id    = "boundary-tls-cert"
+boundary_tls_privkey_secret_id = "boundary-tls-key"
+
+#------------------------------------------------------------------------------
+# Network - Update these values
+#------------------------------------------------------------------------------
+
+vpc_name               = "default"
+controller_subnet_name = "default"
+
+#------------------------------------------------------------------------------
+# Optional - Test with minimal resources
+#------------------------------------------------------------------------------
+
+controller_instance_count     = 1
+ingress_worker_instance_count = 1
+egress_worker_instance_count  = 1
+deploy_ingress_worker         = true
+deploy_egress_worker          = false  # Disable for simpler test

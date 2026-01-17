@@ -1,0 +1,53 @@
+# Boundary Enterprise GCP Marketplace - Git Ignore
+
+# License files (contain sensitive data)
+*.hclic
+boundary.hclic
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Local .tfvars files (may contain sensitive data)
+*.auto.tfvars
+*.auto.tfvars.json
+terraform.tfvars
+!examples/**/terraform.tfvars
+
+# Build artifacts
+.build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Secrets and credentials
+*.pem
+*.key
+*.crt
+credentials.json
+service-account.json

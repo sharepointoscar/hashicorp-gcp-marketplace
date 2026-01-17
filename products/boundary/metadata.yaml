@@ -1,0 +1,262 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
+apiVersion: blueprints.cloud.google.com/v1alpha1
+kind: BlueprintMetadata
+metadata:
+  name: boundary-enterprise
+  annotations:
+    config.kubernetes.io/local-config: "true"
+spec:
+  info:
+    title: HashiCorp Boundary Enterprise
+    source:
+      repo: https://github.com/hashicorp/hashicorp-gcp-marketplace.git
+      sourceType: git
+    version: 0.21.0
+    actuationTool:
+      flavor: Terraform
+      version: ">=1.5.0"
+    description:
+      tagline: Secure remote access to infrastructure
+      detailed: |
+        HashiCorp Boundary Enterprise provides secure remote access to critical
+        infrastructure without exposing private networks. It offers identity-based
+        access management, session recording, and credential brokering.
+      architecture:
+        - Controllers manage authentication, authorization, and session brokering
+        - Ingress workers handle client connections from public networks
+        - Egress workers connect to private target resources
+        - Cloud SQL PostgreSQL provides the database backend
+        - Cloud KMS manages encryption keys (root, worker, recovery, BSR)
+        - GCS stores session recordings (optional)
+  content:
+    subBlueprints:
+      - name: controller
+        location: modules/controller
+      - name: worker
+        location: modules/worker
+    examples:
+      - name: marketplace_test
+        location: examples/marketplace_test
+    documentation:
+      - title: Boundary Documentation
+        url: https://developer.hashicorp.com/boundary/docs
+      - title: Boundary Enterprise Features
+        url: https://developer.hashicorp.com/boundary/docs/enterprise
+      - title: GCP Deployment Guide
+        url: https://developer.hashicorp.com/boundary/tutorials/enterprise/gcp-deployment
+  interfaces:
+    variables:
+      # Required
+      - name: project_id
+        description: GCP project ID to deploy Boundary Enterprise into.
+        varType: string
+        required: true
+      - name: region
+        description: GCP region to deploy Boundary Enterprise into.
+        varType: string
+        required: true
+      - name: boundary_fqdn
+        description: Fully qualified domain name for Boundary. Must resolve to the load balancer IP.
+        varType: string
+        required: true
+      - name: boundary_license_secret_id
+        description: Secret Manager secret ID containing the Boundary Enterprise license.
+        varType: string
+        required: true
+      - name: boundary_tls_cert_secret_id
+        description: Secret Manager secret ID containing the TLS certificate (base64-encoded PEM).
+        varType: string
+        required: true
+      - name: boundary_tls_privkey_secret_id
+        description: Secret Manager secret ID containing the TLS private key (base64-encoded PEM).
+        varType: string
+        required: true
+      # Network
+      - name: vpc_name
+        description: Name of existing VPC network for Boundary deployment.
+        varType: string
+        required: true
+      - name: controller_subnet_name
+        description: Name of existing subnet for Boundary controllers.
+        varType: string
+        required: true
+      - name: worker_subnet_name
+        description: Name of existing subnet for Boundary workers. Can be same as controller subnet.
+        varType: string
+      - name: vpc_project_id
+        description: Project ID where the VPC resides (if different from deployment project).
+        varType: string
+      # Boundary Config
+      - name: boundary_version
+        description: Boundary Enterprise version to install.
+        varType: string
+        defaultValue: "0.21.0+ent"
+      - name: enable_session_recording
+        description: Enable Boundary Session Recording (BSR).
+        varType: bool
+        defaultValue: false
+      - name: boundary_tls_ca_bundle_secret_id
+        description: Secret Manager secret ID for custom CA bundle (base64-encoded PEM). Optional.
+        varType: string
+      # Controller Config
+      - name: controller_instance_count
+        description: Number of Boundary controller instances.
+        varType: number
+        defaultValue: 3
+      - name: controller_machine_type
+        description: Machine type for controller instances.
+        varType: string
+        defaultValue: "n2-standard-4"
+      - name: controller_disk_size_gb
+        description: Boot disk size (GB) for controller instances.
+        varType: number
+        defaultValue: 50
+      - name: api_load_balancing_scheme
+        description: "Load balancer scheme: 'internal' or 'external'."
+        varType: string
+        defaultValue: "external"
+      # Worker Config
+      - name: deploy_ingress_worker
+        description: Deploy an ingress worker (public-facing with load balancer).
+        varType: bool
+        defaultValue: true
+      - name: deploy_egress_worker
+        description: Deploy an egress worker (private, connects to targets).
+        varType: bool
+        defaultValue: true
+      - name: ingress_worker_instance_count
+        description: Number of ingress worker instances.
+        varType: number
+        defaultValue: 2
+      - name: egress_worker_instance_count
+        description: Number of egress worker instances.
+        varType: number
+        defaultValue: 2
+      - name: worker_machine_type
+        description: Machine type for worker instances.
+        varType: string
+        defaultValue: "n2-standard-2"
+      - name: worker_disk_size_gb
+        description: Boot disk size (GB) for worker instances.
+        varType: number
+        defaultValue: 50
+      # Database Config
+      - name: postgres_version
+        description: Cloud SQL PostgreSQL version.
+        varType: string
+        defaultValue: "POSTGRES_16"
+      - name: postgres_machine_type
+        description: Cloud SQL instance tier.
+        varType: string
+        defaultValue: "db-custom-4-16384"
+      - name: postgres_disk_size
+        description: Cloud SQL disk size (GB).
+        varType: number
+        defaultValue: 50
+      - name: postgres_availability_type
+        description: "Cloud SQL availability: 'ZONAL' or 'REGIONAL'."
+        varType: string
+        defaultValue: "REGIONAL"
+      # DNS Config
+      - name: create_cloud_dns_record
+        description: Create Cloud DNS record for boundary_fqdn.
+        varType: bool
+        defaultValue: false
+      - name: cloud_dns_managed_zone
+        description: Cloud DNS managed zone name (required if create_cloud_dns_record is true).
+        varType: string
+      # Firewall Config
+      - name: cidr_ingress_api_allow
+        description: CIDR ranges allowed to access Boundary API (port 9200).
+        varType: list(string)
+        defaultValue:
+          - "0.0.0.0/0"
+      - name: cidr_ingress_worker_allow
+        description: CIDR ranges allowed to access workers (port 9202).
+        varType: list(string)
+        defaultValue:
+          - "0.0.0.0/0"
+      - name: cidr_ingress_ssh_allow
+        description: CIDR ranges allowed for SSH via IAP.
+        varType: list(string)
+        defaultValue:
+          - "10.0.0.0/8"
+      # Labels
+      - name: common_labels
+        description: Common labels to apply to all resources.
+        varType: map(string)
+        defaultValue:
+          managed-by: terraform
+          product: boundary-enterprise
+      # Marketplace
+      - name: friendly_name_prefix
+        description: Friendly name prefix for uniquely naming resources (max 12 chars, no 'boundary').
+        varType: string
+        defaultValue: "mp"
+      - name: goog_cm_deployment_name
+        description: GCP Marketplace deployment name (auto-populated by Marketplace).
+        varType: string
+        defaultValue: ""
+    outputs:
+      - name: boundary_url
+        description: URL to access Boundary API and UI.
+      - name: boundary_fqdn
+        description: Fully qualified domain name for Boundary.
+      - name: controller_load_balancer_ip
+        description: IP address of the controller load balancer.
+      - name: ingress_worker_lb_ip
+        description: IP address of the ingress worker load balancer.
+      - name: database_instance_id
+        description: ID of the Cloud SQL PostgreSQL instance.
+      - name: database_private_ip
+        description: Private IP address of the Cloud SQL instance.
+      - name: key_ring_name
+        description: Name of the Cloud KMS key ring.
+      - name: root_key_name
+        description: Name of the Boundary root KMS key.
+      - name: worker_key_name
+        description: Name of the Boundary worker KMS key.
+      - name: recovery_key_name
+        description: Name of the Boundary recovery KMS key.
+      - name: bsr_bucket_name
+        description: Name of the GCS bucket for session recording (if enabled).
+      - name: deployment_id
+        description: Unique deployment identifier.
+      - name: boundary_version
+        description: Deployed Boundary Enterprise version.
+      - name: region
+        description: GCP region where Boundary is deployed.
+      - name: post_deployment_instructions
+        description: Instructions for accessing Boundary after deployment.
+  requirements:
+    roles:
+      - level: Project
+        roles:
+          - roles/compute.admin
+          - roles/iam.serviceAccountAdmin
+          - roles/iam.serviceAccountUser
+          - roles/cloudsql.admin
+          - roles/cloudkms.admin
+          - roles/storage.admin
+          - roles/secretmanager.secretAccessor
+          - roles/dns.admin
+    services:
+      - compute.googleapis.com
+      - sqladmin.googleapis.com
+      - cloudkms.googleapis.com
+      - storage.googleapis.com
+      - secretmanager.googleapis.com
+      - dns.googleapis.com
+      - servicenetworking.googleapis.com
+      - iam.googleapis.com
+    providerVersions:
+      - source: hashicorp/google
+        version: ">= 5.0.0"
+      - source: hashicorp/google-beta
+        version: ">= 5.0.0"
+      - source: hashicorp/random
+        version: ">= 3.0.0"
+      - source: hashicorp/tls
+        version: ">= 4.0.0"
