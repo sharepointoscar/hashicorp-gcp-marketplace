@@ -37,8 +37,8 @@ spec:
       - name: worker
         location: modules/worker
     examples:
-      - name: marketplace_test
-        location: examples/marketplace_test
+      - name: test
+        location: test
     documentation:
       - title: Boundary Documentation
         url: https://developer.hashicorp.com/boundary/docs
