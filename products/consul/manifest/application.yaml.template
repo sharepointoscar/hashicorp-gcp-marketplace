@@ -1,0 +1,95 @@
+apiVersion: app.k8s.io/v1beta1
+kind: Application
+metadata:
+  name: "$name"
+  namespace: "$namespace"
+  labels:
+    app.kubernetes.io/name: "$name"
+  annotations:
+    kubernetes-engine.cloud.google.com/icon: >-
+      data:image/png;base64,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
+    marketplace.cloud.google.com/deploy-info: '{"partner_id": "hashicorp", "product_id": "consul", "partner_name": "HashiCorp"}'
+spec:
+  descriptor:
+    type: Consul
+    version: "1.21.7"
+    description: |-
+      HashiCorp Consul Enterprise is a service networking solution that enables
+      teams to manage secure network connectivity between services and across
+      multi-cloud environments and runtimes.
+
+      Features:
+      - Service Discovery and Health Checking
+      - Service Mesh with Connect
+      - Key/Value Store
+      - Multi-Datacenter Federation
+    maintainers:
+      - name: HashiCorp
+        url: https://www.hashicorp.com
+    links:
+      - description: Documentation
+        url: https://developer.hashicorp.com/consul/docs
+      - description: GitHub Repository
+        url: https://github.com/hashicorp/consul
+      - description: Support
+        url: https://support.hashicorp.com
+    notes: |-
+      # Consul Enterprise
+
+      Consul has been deployed successfully.
+
+      ## Accessing the UI
+
+      Get the external IP of the Consul UI service:
+
+      ```
+      kubectl get service $name-consul-ui -n $namespace -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+      ```
+
+      Then access the UI at http://<EXTERNAL_IP>:8500/ui
+
+      ## Verifying the Cluster
+
+      Check cluster members:
+
+      ```
+      kubectl exec -n $namespace $name-consul-0 -- consul members
+      ```
+
+      ## Using the Key/Value Store
+
+      Store a value:
+
+      ```
+      kubectl exec -n $namespace $name-consul-0 -- consul kv put hello world
+      ```
+
+      Retrieve a value:
+
+      ```
+      kubectl exec -n $namespace $name-consul-0 -- consul kv get hello
+      ```
+
+  info:
+    - name: Consul UI
+      type: Reference
+      valueFrom:
+        serviceRef:
+          name: "$name-consul-ui"
+    - name: Consul Version
+      value: "1.21.7"
+
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "$name"
+  componentKinds:
+    - group: v1
+      kind: Secret
+    - group: v1
+      kind: ConfigMap
+    - group: v1
+      kind: Service
+    - group: v1
+      kind: ServiceAccount
+    - group: apps/v1
+      kind: StatefulSet

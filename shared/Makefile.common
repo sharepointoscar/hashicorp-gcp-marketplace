@@ -6,10 +6,12 @@ PLATFORM := linux/amd64
 BUILD_DIR := .build
 
 # Docker build flags for GCP Marketplace compliance
+# --pull forces fresh pull of base images (important for security updates)
 DOCKER_BUILD_FLAGS := --platform $(PLATFORM) \
     --provenance=false \
     --sbom=false \
-    --no-cache
+    --no-cache \
+    --pull
 
 # Colors for output
 RED := \033[0;31m

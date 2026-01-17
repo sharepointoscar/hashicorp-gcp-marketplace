@@ -1,0 +1,64 @@
+# Product metadata for HashiCorp Consul Enterprise
+# GCP Marketplace Click-to-Deploy
+
+metadata:
+  id: consul
+  version: 1.21.0
+  partnerId: hashicorp
+  solutionId: consul-enterprise
+
+name: HashiCorp Consul Enterprise
+description: |
+  Consul is a service networking solution that enables teams to manage secure network
+  connectivity between services and across multi-cloud environments and runtimes.
+
+  Key features:
+  - Service Discovery: Automatically register and discover services
+  - Service Mesh: Zero-trust networking with mTLS and authorization
+  - Key/Value Store: Distributed configuration management
+  - Health Checking: Service and node health monitoring
+  - Multi-Datacenter: Federate clusters across datacenters and clouds
+
+vendor: HashiCorp
+version: 1.21.0
+
+support:
+  documentation: https://developer.hashicorp.com/consul/docs
+  support: https://support.hashicorp.com
+  github: https://github.com/hashicorp/consul
+
+architecture:
+  deployment: StatefulSet
+  storage: Raft Integrated Storage (PVC)
+  replicas: 3 (default, odd number required)
+
+ports:
+  - name: http
+    port: 8500
+    description: HTTP API and UI
+  - name: https
+    port: 8501
+    description: HTTPS API
+  - name: grpc
+    port: 8502
+    description: gRPC API
+  - name: grpc-tls
+    port: 8503
+    description: gRPC TLS API
+  - name: dns
+    port: 8600
+    description: DNS interface
+  - name: server-rpc
+    port: 8300
+    description: Server RPC
+  - name: serf-lan
+    port: 8301
+    description: Serf LAN gossip
+  - name: serf-wan
+    port: 8302
+    description: Serf WAN gossip
+
+license:
+  type: Enterprise
+  required: true
+  envVar: CONSUL_LICENSE

@@ -1,0 +1,155 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: $name-tester
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: $name-tester
+    app.kubernetes.io/component: tester
+spec:
+  restartPolicy: Never
+  containers:
+    - name: tester
+      image: $imageConsul
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+
+          echo "=== Consul GCP Marketplace Verification ==="
+          echo ""
+
+          # Configuration
+          CONSUL_HTTP_ADDR="http://$name-consul-headless.$namespace.svc.cluster.local:8500"
+          export CONSUL_HTTP_ADDR
+          MAX_RETRIES=60
+          RETRY_INTERVAL=5
+
+          echo "Consul HTTP Address: $CONSUL_HTTP_ADDR"
+          echo ""
+
+          # Function to wait for Consul to be ready
+          wait_for_consul() {
+            echo ">>> Waiting for Consul cluster to be ready..."
+            local retries=0
+            while [ $retries -lt $MAX_RETRIES ]; do
+              if consul members 2>/dev/null | grep -q "alive"; then
+                echo "Consul cluster is ready!"
+                return 0
+              fi
+              retries=$((retries + 1))
+              echo "Attempt $retries/$MAX_RETRIES - Consul not ready yet, retrying in ${RETRY_INTERVAL}s..."
+              sleep $RETRY_INTERVAL
+            done
+            echo "ERROR: Consul cluster did not become ready in time"
+            return 1
+          }
+
+          # Function to wait for leader election
+          wait_for_leader() {
+            echo ">>> Waiting for leader election..."
+            local retries=0
+            while [ $retries -lt $MAX_RETRIES ]; do
+              leader=$(consul operator raft list-peers 2>/dev/null | grep leader || true)
+              if [ -n "$leader" ]; then
+                echo "Leader elected: $leader"
+                return 0
+              fi
+              retries=$((retries + 1))
+              echo "Attempt $retries/$MAX_RETRIES - No leader yet, retrying in ${RETRY_INTERVAL}s..."
+              sleep $RETRY_INTERVAL
+            done
+            echo "ERROR: Leader election did not complete in time"
+            return 1
+          }
+
+          # Test 1: Wait for Consul cluster
+          echo ""
+          echo "=== Test 1: Cluster Availability ==="
+          wait_for_consul
+
+          # Test 2: Wait for leader
+          echo ""
+          echo "=== Test 2: Leader Election ==="
+          wait_for_leader
+
+          # Test 3: Check cluster members
+          echo ""
+          echo "=== Test 3: Cluster Members ==="
+          consul members
+          MEMBER_COUNT=$(consul members | grep -c "alive")
+          echo "Active members: $MEMBER_COUNT"
+          if [ "$MEMBER_COUNT" -lt 1 ]; then
+            echo "ERROR: Expected at least 1 active member, got $MEMBER_COUNT"
+            exit 1
+          fi
+          echo "PASS: Cluster has $MEMBER_COUNT active members"
+
+          # Test 4: Key/Value store
+          echo ""
+          echo "=== Test 4: Key/Value Store ==="
+          TEST_KEY="marketplace-test-key"
+          TEST_VALUE="marketplace-test-value-$(date +%s)"
+
+          echo "Writing key: $TEST_KEY = $TEST_VALUE"
+          consul kv put "$TEST_KEY" "$TEST_VALUE"
+
+          echo "Reading key: $TEST_KEY"
+          RETRIEVED_VALUE=$(consul kv get "$TEST_KEY")
+
+          if [ "$RETRIEVED_VALUE" = "$TEST_VALUE" ]; then
+            echo "PASS: KV store working correctly"
+          else
+            echo "ERROR: KV store returned unexpected value: $RETRIEVED_VALUE"
+            exit 1
+          fi
+
+          # Cleanup test key
+          consul kv delete "$TEST_KEY"
+          echo "Test key cleaned up"
+
+          # Test 5: Check Raft peers
+          echo ""
+          echo "=== Test 5: Raft Consensus ==="
+          consul operator raft list-peers
+          PEER_COUNT=$(consul operator raft list-peers | grep -c "voter")
+          echo "Raft voters: $PEER_COUNT"
+          if [ "$PEER_COUNT" -lt 1 ]; then
+            echo "ERROR: Expected at least 1 Raft voter, got $PEER_COUNT"
+            exit 1
+          fi
+          echo "PASS: Raft consensus operational with $PEER_COUNT voters"
+
+          # Test 6: Health check endpoint
+          echo ""
+          echo "=== Test 6: Health Check ==="
+          HEALTH_STATUS=$(curl -s "${CONSUL_HTTP_ADDR}/v1/status/leader")
+          if [ -n "$HEALTH_STATUS" ] && [ "$HEALTH_STATUS" != '""' ]; then
+            echo "PASS: Leader endpoint responsive: $HEALTH_STATUS"
+          else
+            echo "ERROR: Leader endpoint returned empty response"
+            exit 1
+          fi
+
+          # Test 7: Service registration (internal test service)
+          echo ""
+          echo "=== Test 7: Service Registration ==="
+          consul services register -name="marketplace-test-svc" -port=9999
+          sleep 2
+          SVC_CHECK=$(consul catalog services | grep -c "marketplace-test-svc" || echo "0")
+          if [ "$SVC_CHECK" -ge 1 ]; then
+            echo "PASS: Service registration working"
+          else
+            echo "ERROR: Service registration failed"
+            exit 1
+          fi
+          consul services deregister -id="marketplace-test-svc"
+          echo "Test service deregistered"
+
+          # Summary
+          echo ""
+          echo "=== All Tests Passed ==="
+          echo "Consul Enterprise GCP Marketplace verification completed successfully!"
+          exit 0
+  activeDeadlineSeconds: 600

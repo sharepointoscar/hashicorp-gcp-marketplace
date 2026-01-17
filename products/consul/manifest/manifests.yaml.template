@@ -1,0 +1,399 @@
+---
+# Service Account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: $consulServiceAccount
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: $name
+    app.kubernetes.io/component: consul
+
+---
+# Enterprise License Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: $name-consul-license
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: $name
+    app.kubernetes.io/component: consul
+type: Opaque
+stringData:
+  license: "$consulLicense"
+
+---
+# Consul Configuration ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: $name-consul-config
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: $name
+    app.kubernetes.io/component: consul
+data:
+  consul.hcl: |
+    datacenter = "$datacenter"
+    data_dir = "/consul/data"
+
+    server = true
+    bootstrap_expect = $replicas
+
+    ui_config {
+      enabled = true
+    }
+
+    connect {
+      enabled = true
+    }
+
+    addresses {
+      http = "0.0.0.0"
+      grpc = "0.0.0.0"
+    }
+
+    ports {
+      http = 8500
+      https = -1
+      grpc = 8502
+      grpc_tls = -1
+      serf_lan = 8301
+      serf_wan = 8302
+      server = 8300
+      dns = 8600
+    }
+
+    retry_join = [
+      "$name-consul-0.$name-consul-headless.$namespace.svc.cluster.local",
+      "$name-consul-1.$name-consul-headless.$namespace.svc.cluster.local",
+      "$name-consul-2.$name-consul-headless.$namespace.svc.cluster.local"
+    ]
+
+    # Performance tuning
+    performance {
+      raft_multiplier = 1
+    }
+
+    # Telemetry for monitoring
+    telemetry {
+      disable_hostname = true
+      prometheus_retention_time = "30s"
+    }
+
+---
+# Headless Service for StatefulSet DNS
+apiVersion: v1
+kind: Service
+metadata:
+  name: $name-consul-headless
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: $name
+    app.kubernetes.io/component: consul
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: http
+      port: 8500
+      targetPort: 8500
+    - name: grpc
+      port: 8502
+      targetPort: 8502
+    - name: server-rpc
+      port: 8300
+      targetPort: 8300
+    - name: serf-lan-tcp
+      port: 8301
+      targetPort: 8301
+      protocol: TCP
+    - name: serf-lan-udp
+      port: 8301
+      targetPort: 8301
+      protocol: UDP
+    - name: serf-wan-tcp
+      port: 8302
+      targetPort: 8302
+      protocol: TCP
+    - name: serf-wan-udp
+      port: 8302
+      targetPort: 8302
+      protocol: UDP
+    - name: dns-tcp
+      port: 8600
+      targetPort: 8600
+      protocol: TCP
+    - name: dns-udp
+      port: 8600
+      targetPort: 8600
+      protocol: UDP
+  selector:
+    app.kubernetes.io/name: $name
+    app.kubernetes.io/component: consul
+
+---
+# UI Service (LoadBalancer)
+apiVersion: v1
+kind: Service
+metadata:
+  name: $name-consul-ui
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: $name
+    app.kubernetes.io/component: consul
+spec:
+  type: LoadBalancer
+  ports:
+    - name: http
+      port: 8500
+      targetPort: 8500
+  selector:
+    app.kubernetes.io/name: $name
+    app.kubernetes.io/component: consul
+
+---
+# DNS Service (ClusterIP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: $name-consul-dns
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: $name
+    app.kubernetes.io/component: consul
+spec:
+  type: ClusterIP
+  ports:
+    - name: dns-tcp
+      port: 8600
+      targetPort: 8600
+      protocol: TCP
+    - name: dns-udp
+      port: 8600
+      targetPort: 8600
+      protocol: UDP
+  selector:
+    app.kubernetes.io/name: $name
+    app.kubernetes.io/component: consul
+
+---
+# Consul Server StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: $name-consul
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: $name
+    app.kubernetes.io/component: consul
+spec:
+  serviceName: $name-consul-headless
+  replicas: $replicas
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: $name
+      app.kubernetes.io/component: consul
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: $name
+        app.kubernetes.io/component: consul
+      annotations:
+        consul.hashicorp.com/config-checksum: "static"
+    spec:
+      serviceAccountName: $consulServiceAccount
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        fsGroup: 1000
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 100
+        fsGroupChangePolicy: "OnRootMismatch"
+      containers:
+        # Consul Server Container
+        - name: consul
+          image: $imageConsul
+          imagePullPolicy: IfNotPresent
+          command:
+            - consul
+            - agent
+            - -config-file=/consul/config/consul.hcl
+            - -advertise=$(POD_IP)
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: CONSUL_LICENSE
+              valueFrom:
+                secretKeyRef:
+                  name: $name-consul-license
+                  key: license
+            - name: CONSUL_HTTP_ADDR
+              value: "http://127.0.0.1:8500"
+            - name: CONSUL_DISABLE_PERM_MGMT
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 8500
+            - name: grpc
+              containerPort: 8502
+            - name: server-rpc
+              containerPort: 8300
+            - name: serf-lan-tcp
+              containerPort: 8301
+              protocol: TCP
+            - name: serf-lan-udp
+              containerPort: 8301
+              protocol: UDP
+            - name: serf-wan-tcp
+              containerPort: 8302
+              protocol: TCP
+            - name: serf-wan-udp
+              containerPort: 8302
+              protocol: UDP
+            - name: dns-tcp
+              containerPort: 8600
+              protocol: TCP
+            - name: dns-udp
+              containerPort: 8600
+              protocol: UDP
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+          volumeMounts:
+            - name: data
+              mountPath: /consul/data
+            - name: config
+              mountPath: /consul/config
+          livenessProbe:
+            exec:
+              command:
+                - consul
+                - members
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /v1/status/leader
+              port: 8500
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+        # UBB Agent Sidecar (Usage-Based Billing - required for Marketplace)
+        - name: ubbagent
+          image: $imageUbbagent
+          env:
+            - name: AGENT_CONFIG_FILE
+              value: /etc/ubbagent/config.yaml
+            - name: AGENT_LOCAL_PORT
+              value: "6080"
+            - name: AGENT_STATE_DIR
+              value: /var/lib/ubbagent
+            - name: AGENT_REPORT_DIR
+              value: /var/lib/ubbagent/reports
+            - name: AGENT_ENCODED_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: "$reportingSecret"
+                  key: reporting-key
+            - name: AGENT_CONSUMER_ID
+              valueFrom:
+                secretKeyRef:
+                  name: "$reportingSecret"
+                  key: consumer-id
+          volumeMounts:
+            - name: ubbagent-config
+              mountPath: /etc/ubbagent
+            - name: ubbagent-state
+              mountPath: /var/lib/ubbagent
+
+      volumes:
+        - name: config
+          configMap:
+            name: $name-consul-config
+        - name: ubbagent-config
+          configMap:
+            name: $name-ubbagent-config
+        - name: ubbagent-state
+          emptyDir: {}
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: $name
+                    app.kubernetes.io/component: consul
+                topologyKey: kubernetes.io/hostname
+
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: $storageClass
+        resources:
+          requests:
+            storage: $storageSize
+
+---
+# UBB Agent ConfigMap (Usage-Based Billing)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: $name-ubbagent-config
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: $name
+    app.kubernetes.io/component: ubbagent
+data:
+  config.yaml: |
+    identities:
+      - name: gcp
+        gcp:
+          encodedServiceAccountKey: $AGENT_ENCODED_KEY
+
+    metrics:
+      - name: consul_instance_time
+        type: int
+        endpoints:
+          - name: servicecontrol
+        passthrough: {}
+
+    endpoints:
+      - name: servicecontrol
+        servicecontrol:
+          identity: gcp
+          # serviceName format: <solution-id>.mp-<partner-id>.appspot.com
+          # This is provided by Google during marketplace onboarding
+          serviceName: consul.mp-hashicorp.appspot.com
+          consumerId: $AGENT_CONSUMER_ID
+
+    sources:
+      - name: instance_time_heartbeat
+        heartbeat:
+          metric: consul_instance_time
+          intervalSeconds: 3600
+          value:
+            int64Value: 1
