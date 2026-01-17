@@ -1,6 +1,6 @@
 # HashiCorp Boundary Enterprise - GCP Marketplace
 
-This directory contains the GCP Marketplace VM Solution for HashiCorp Boundary Enterprise.
+This directory contains the GCP Marketplace VM Solution for HashiCorp Boundary Enterprise, built using **HashiCorp Validated Designs (HVD)**.
 
 ## Overview
 
@@ -9,34 +9,100 @@ Boundary Enterprise provides secure remote access to infrastructure without expo
 - **Controllers** - Boundary control plane on Compute Engine VMs
 - **Workers** - Ingress and egress workers for session proxying
 - **Cloud SQL PostgreSQL** - Database backend
-- **Cloud KMS** - Encryption key management
-- **GCS** - Backup and session recording storage (BSR)
+- **Cloud KMS** - Encryption key management (root, worker, recovery, BSR keys)
+- **GCS** - Session recording storage (BSR)
+- **Secret Manager** - Secure storage for license, TLS certs, and database credentials
+
+## HashiCorp Validated Designs (HVD)
+
+This deployment is built on official HashiCorp Validated Design modules:
+
+| Component | HVD Module | Description |
+|-----------|------------|-------------|
+| **Controller** | `terraform-google-boundary-enterprise-controller-hvd` | Boundary control plane with Cloud SQL, KMS, and HA support |
+| **Worker** | `terraform-google-boundary-enterprise-worker-hvd` | Ingress/egress workers with KMS-based authentication |
+| **Prerequisites** | Custom module | Automated secrets and TLS certificate generation |
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         PUBLIC SUBNET                            │
-│  ┌─────────────┐    ┌──────────────────────────────────────┐    │
-│  │   Ingress   │    │      Boundary Control Plane          │    │
-│  │   Worker    │    │   (Controllers across multiple AZs)  │    │
-│  └──────┬──────┘    └──────────────────────────────────────┘    │
-│         │                          │                             │
-├─────────┼──────────────────────────┼─────────────────────────────┤
-│         │        PRIVATE SUBNET    │                             │
-│         ▼                          ▼                             │
-│  ┌─────────────┐           ┌──────────────┐   ┌──────────────┐  │
-│  │   Egress    │           │   Cloud SQL  │   │   Cloud KMS  │  │
-│  │   Worker    │           │  PostgreSQL  │   │              │  │
-│  └──────┬──────┘           └──────────────┘   └──────────────┘  │
-│         │                                                        │
-│         ▼                                                        │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
-│  │   Target    │  │   Target    │  │   Target    │              │
-│  │    Host     │  │    Host     │  │    Host     │              │
-│  └─────────────┘  └─────────────┘  └─────────────┘              │
-└─────────────────────────────────────────────────────────────────┘
+                              ┌─────────────────────────────────────────┐
+                              │           INTERNET / CLIENTS            │
+                              └──────────────────┬──────────────────────┘
+                                                 │
+                                                 ▼
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                                  GCP PROJECT                                    │
+│  ┌──────────────────────────────────────────────────────────────────────────┐  │
+│  │                            PUBLIC SUBNET                                  │  │
+│  │                                                                           │  │
+│  │   ┌─────────────────────────────────────────────────────────────────┐    │  │
+│  │   │              BOUNDARY CONTROL PLANE (HVD Controller)            │    │  │
+│  │   │  ┌───────────┐  ┌───────────┐  ┌───────────┐                    │    │  │
+│  │   │  │Controller │  │Controller │  │Controller │   Port 9200 (API)  │    │  │
+│  │   │  │   VM 1    │  │   VM 2    │  │   VM 3    │   Port 9201 (Cluster)   │  │
+│  │   │  │  (AZ-a)   │  │  (AZ-b)   │  │  (AZ-c)   │                    │    │  │
+│  │   │  └───────────┘  └───────────┘  └───────────┘                    │    │  │
+│  │   │                        │                                         │    │  │
+│  │   │              ┌─────────┴─────────┐                              │    │  │
+│  │   │              │   Load Balancer   │◄──── External/Internal       │    │  │
+│  │   │              └───────────────────┘                              │    │  │
+│  │   └─────────────────────────────────────────────────────────────────┘    │  │
+│  │                                                                           │  │
+│  │   ┌──────────────────────────┐                                           │  │
+│  │   │  INGRESS WORKER (HVD)   │                                            │  │
+│  │   │  ┌────────┐ ┌────────┐  │   Port 9202 (Proxy)                       │  │
+│  │   │  │Worker 1│ │Worker 2│  │◄──── Client Sessions                      │  │
+│  │   │  └────────┘ └────────┘  │                                            │  │
+│  │   └────────────┬─────────────┘                                           │  │
+│  │                │                                                          │  │
+│  └────────────────┼──────────────────────────────────────────────────────────┘  │
+│                   │                                                              │
+│  ┌────────────────┼──────────────────────────────────────────────────────────┐  │
+│  │                │              PRIVATE SUBNET                               │  │
+│  │                ▼                                                           │  │
+│  │   ┌──────────────────────────┐                                            │  │
+│  │   │   EGRESS WORKER (HVD)   │                                             │  │
+│  │   │  ┌────────┐ ┌────────┐  │                                             │  │
+│  │   │  │Worker 1│ │Worker 2│  │                                             │  │
+│  │   │  └────────┘ └────────┘  │                                             │  │
+│  │   └────────────┬─────────────┘                                            │  │
+│  │                │                                                           │  │
+│  │                ▼                                                           │  │
+│  │   ┌─────────┐ ┌─────────┐ ┌─────────┐                                     │  │
+│  │   │ Target  │ │ Target  │ │ Target  │  SSH, RDP, K8s, Databases           │  │
+│  │   │  Host   │ │  Host   │ │  Host   │                                     │  │
+│  │   └─────────┘ └─────────┘ └─────────┘                                     │  │
+│  │                                                                            │  │
+│  └────────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                   │
+│  ┌──────────────────────────────────────────────────────────────────────────────┐│
+│  │                           GCP MANAGED SERVICES                                ││
+│  │                                                                               ││
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐               ││
+│  │  │   Cloud SQL     │  │    Cloud KMS    │  │ Secret Manager  │               ││
+│  │  │   PostgreSQL    │  │                 │  │                 │               ││
+│  │  │                 │  │  • Root Key     │  │  • License      │               ││
+│  │  │  • boundary DB  │  │  • Worker Key   │  │  • TLS Cert     │               ││
+│  │  │  • HA (Regional)│  │  • Recovery Key │  │  • TLS Key      │               ││
+│  │  │                 │  │  • BSR Key      │  │  • DB Password  │               ││
+│  │  └─────────────────┘  └─────────────────┘  └─────────────────┘               ││
+│  │                                                                               ││
+│  │  ┌─────────────────┐                                                         ││
+│  │  │   Cloud Storage │  (Optional - Session Recording)                         ││
+│  │  │   GCS Bucket    │                                                         ││
+│  │  └─────────────────┘                                                         ││
+│  └──────────────────────────────────────────────────────────────────────────────┘│
+└───────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Traffic Flow
+
+1. **Client** connects to Boundary API/UI via Load Balancer (port 9200)
+2. **Controller** authenticates user and authorizes session
+3. **Client** connects to Ingress Worker (port 9202) for session
+4. **Ingress Worker** proxies to Egress Worker (multi-hop) or directly to target
+5. **Egress Worker** connects to target host (SSH, RDP, K8s, etc.)
 
 ## Prerequisites
 
