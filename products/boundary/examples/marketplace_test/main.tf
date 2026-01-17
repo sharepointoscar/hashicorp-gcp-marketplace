@@ -8,16 +8,27 @@
 # testing GCP Marketplace validation.
 #------------------------------------------------------------------------------
 
+provider "google" {
+  project = var.project_id
+  region  = var.region
+}
+
+provider "google-beta" {
+  project = var.project_id
+  region  = var.region
+}
+
 module "boundary" {
   source = "../.."
 
   # Required
-  project_id                     = var.project_id
-  region                         = var.region
-  boundary_fqdn                  = var.boundary_fqdn
-  boundary_license_secret_id     = var.boundary_license_secret_id
-  boundary_tls_cert_secret_id    = var.boundary_tls_cert_secret_id
-  boundary_tls_privkey_secret_id = var.boundary_tls_privkey_secret_id
+  project_id                           = var.project_id
+  region                               = var.region
+  boundary_fqdn                        = var.boundary_fqdn
+  boundary_license_secret_id           = var.boundary_license_secret_id
+  boundary_tls_cert_secret_id          = var.boundary_tls_cert_secret_id
+  boundary_tls_privkey_secret_id       = var.boundary_tls_privkey_secret_id
+  boundary_database_password_secret_id = var.boundary_database_password_secret_id
 
   # Network
   vpc_name               = var.vpc_name

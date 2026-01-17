@@ -36,6 +36,11 @@ variable "boundary_tls_privkey_secret_id" {
   description = "Secret Manager secret ID for TLS private key."
 }
 
+variable "boundary_database_password_secret_id" {
+  type        = string
+  description = "Secret Manager secret ID for database password."
+}
+
 #------------------------------------------------------------------------------
 # Network Variables
 #------------------------------------------------------------------------------

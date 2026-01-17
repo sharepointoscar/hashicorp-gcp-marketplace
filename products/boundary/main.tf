@@ -39,13 +39,14 @@ module "controller" {
   friendly_name_prefix = local.name_prefix
 
   # Boundary configuration
-  boundary_fqdn                  = var.boundary_fqdn
-  boundary_version               = var.boundary_version
-  boundary_license_secret_id     = var.boundary_license_secret_id
-  boundary_tls_cert_secret_id    = var.boundary_tls_cert_secret_id
-  boundary_tls_privkey_secret_id = var.boundary_tls_privkey_secret_id
-  boundary_tls_ca_bundle_secret_id = var.boundary_tls_ca_bundle_secret_id
-  enable_session_recording       = var.enable_session_recording
+  boundary_fqdn                            = var.boundary_fqdn
+  boundary_version                         = var.boundary_version
+  boundary_license_secret_id               = var.boundary_license_secret_id
+  boundary_tls_cert_secret_id              = var.boundary_tls_cert_secret_id
+  boundary_tls_privkey_secret_id           = var.boundary_tls_privkey_secret_id
+  boundary_tls_ca_bundle_secret_id         = var.boundary_tls_ca_bundle_secret_id
+  boundary_database_password_secret_version = var.boundary_database_password_secret_id
+  enable_session_recording                 = var.enable_session_recording
 
   # Network
   vpc                       = var.vpc_name

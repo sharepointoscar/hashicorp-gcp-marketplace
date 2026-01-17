@@ -51,6 +51,11 @@ variable "boundary_tls_privkey_secret_id" {
   description = "Secret Manager secret ID containing the TLS private key (base64-encoded PEM)."
 }
 
+variable "boundary_database_password_secret_id" {
+  type        = string
+  description = "Secret Manager secret ID containing the PostgreSQL database password."
+}
+
 #------------------------------------------------------------------------------
 # Network Configuration
 #------------------------------------------------------------------------------
