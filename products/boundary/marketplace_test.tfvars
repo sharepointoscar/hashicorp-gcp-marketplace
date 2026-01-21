@@ -3,7 +3,8 @@
 # This file provides values for required variables without defaults
 
 # Required - GCP Marketplace deployment identifier
-goog_cm_deployment_name = "test-deployment"
+# Note: Must be alphanumeric only and < 13 chars for friendly_name_prefix validation
+goog_cm_deployment_name = "mptest"
 
 # Required - Project and Region
 region = "us-central1"
@@ -17,16 +18,11 @@ boundary_fqdn = "boundary.example.com"
 
 # Required - Secret Manager IDs (must exist in target project)
 # These are placeholder values - actual secrets must be created before deployment
-boundary_license_secret_id          = "boundary-license"
-boundary_tls_cert_secret_id         = "boundary-tls-cert"
-boundary_tls_privkey_secret_id      = "boundary-tls-key"
+boundary_license_secret_id           = "boundary-license"
+boundary_tls_cert_secret_id          = "boundary-tls-cert"
+boundary_tls_privkey_secret_id       = "boundary-tls-key"
 boundary_database_password_secret_id = "boundary-db-password"
 
 # Required - Network Configuration
 vpc_name               = "default"
 controller_subnet_name = "default"
-
-# Org policy compatibility
-create_service_account_keys = false
-create_cloud_nat            = false
-create_proxy_subnet         = false

@@ -13,6 +13,24 @@
 # - GCS: Session recording storage (optional)
 #------------------------------------------------------------------------------
 
+#------------------------------------------------------------------------------
+# Provider Configuration
+#------------------------------------------------------------------------------
+
+provider "google" {
+  project = var.project_id
+  region  = var.region
+}
+
+provider "google-beta" {
+  project = var.project_id
+  region  = var.region
+}
+
+#------------------------------------------------------------------------------
+# Local Values
+#------------------------------------------------------------------------------
+
 locals {
   # Use Marketplace deployment name if provided, otherwise use friendly_name_prefix
   name_prefix = var.goog_cm_deployment_name != "" ? var.goog_cm_deployment_name : var.friendly_name_prefix
@@ -143,7 +161,7 @@ module "egress_worker" {
 
   # Boundary configuration
   boundary_version           = var.boundary_version
-  boundary_upstream          = var.deploy_ingress_worker ? [module.ingress_worker[0].worker_lb_ip] : [var.boundary_fqdn]
+  boundary_upstream          = var.deploy_ingress_worker ? [module.ingress_worker[0].proxy_lb_ip_address] : [var.boundary_fqdn]
   boundary_upstream_port     = var.deploy_ingress_worker ? 9202 : 9201
   worker_is_internal         = true  # No public IP for egress
   enable_session_recording   = var.enable_session_recording
