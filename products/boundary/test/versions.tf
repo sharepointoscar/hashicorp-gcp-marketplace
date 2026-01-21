@@ -2,16 +2,16 @@
 # SPDX-License-Identifier: MPL-2.0
 
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = "~> 1.3"
 
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = ">= 5.0.0"
+      version = "~> 5.32"
     }
     google-beta = {
       source  = "hashicorp/google-beta"
-      version = ">= 5.0.0"
+      version = "~> 5.32"
     }
   }
 }
