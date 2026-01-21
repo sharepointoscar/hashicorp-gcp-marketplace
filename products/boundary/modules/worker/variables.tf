@@ -68,10 +68,6 @@ variable "hcp_boundary_cluster_id" {
   type        = string
   description = "ID of the Boundary cluster in HCP. Only used when using HCP Boundary."
   default     = null
-  validation {
-    condition     = var.hcp_boundary_cluster_id != null ? var.boundary_upstream == null : true
-    error_message = "HCP Boundary cluster ID must be provided when `boundary_upstream` is not provided."
-  }
 }
 
 variable "enable_session_recording" {
@@ -208,8 +204,4 @@ variable "custom_user_data_template" {
   type        = string
   description = "(optional) Alternative template file to provide for instance template metadata script. place the file in your local `./templates folder` no path required"
   default     = "boundary_custom_data.sh.tpl"
-  validation {
-    condition     = can(fileexists("${path.cwd}/templates/${var.custom_user_data_template}") || fileexists("${path.module}/templates/${var.custom_user_data_template}"))
-    error_message = "File `${path.cwd}/templates/${var.custom_user_data_template}` or `${path.module}/templates/${var.custom_user_data_template} not found or not readable"
-  }
 }

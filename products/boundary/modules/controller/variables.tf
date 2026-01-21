@@ -133,11 +133,6 @@ variable "create_cloud_dns_record" {
   type        = bool
   description = "Boolean to create Google Cloud DNS record for `boundary_fqdn` resolving to load balancer IP. `cloud_dns_managed_zone` is required when `true`."
   default     = false
-
-  validation {
-    condition     = var.create_cloud_dns_record == true ? var.cloud_dns_managed_zone != null : true
-    error_message = "Must set a `cloud_dns_managed_zone` when `create_cloud_dns_record` is set to `true`."
-  }
 }
 
 variable "cloud_dns_managed_zone" {

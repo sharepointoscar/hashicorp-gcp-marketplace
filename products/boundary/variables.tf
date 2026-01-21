@@ -270,3 +270,15 @@ variable "goog_cm_deployment_name" {
   description = "GCP Marketplace deployment name (auto-populated by Marketplace)."
   default     = ""
 }
+
+variable "zone" {
+  type        = string
+  description = "GCP zone for zonal resources (auto-populated by Marketplace)."
+  default     = ""
+}
+
+variable "adminEmailAddress" {
+  type        = string
+  description = "Admin email address for notifications (auto-populated by Marketplace)."
+  default     = ""
+}

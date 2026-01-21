@@ -2,8 +2,15 @@
 # Test values for GCP Marketplace Producer Portal validation
 # This file provides values for required variables without defaults
 
+# Required - GCP Marketplace deployment identifier
+goog_cm_deployment_name = "test-deployment"
+
 # Required - Project and Region
 region = "us-central1"
+zone   = "us-central1-f"
+
+# Required - Admin email for notifications
+adminEmailAddress = "default-user@example.com"
 
 # Required - Boundary Configuration
 boundary_fqdn = "boundary.example.com"
