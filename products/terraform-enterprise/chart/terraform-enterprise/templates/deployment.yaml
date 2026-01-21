@@ -1,0 +1,406 @@
+{{/*
+Copyright IBM Corp. 2023, 2025
+SPDX-License-Identifier: MPL-2.0
+*/}}
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: terraform-enterprise
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: terraform-enterprise
+    {{- if .Values.deployment.labels }}
+    {{- toYaml .Values.deployment.labels | nindent 4 }}
+    {{- end }}
+  {{- if .Values.deployment.annotations }}
+  annotations:
+    {{- toYaml .Values.deployment.annotations | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: terraform-enterprise
+  {{- with .Values.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      annotations:
+        checksum/env-config: {{ include (print $.Template.BasePath "/config-map.yaml") . | sha256sum }}
+        checksum/secrets: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- if .Values.pod.annotations }}
+        {{- toYaml .Values.pod.annotations | nindent 8 }}
+        {{- end }}
+        {{- if .Values.tfe.metrics.enable }}
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "{{ .Values.tfe.metrics.httpPort }}"
+        prometheus.io/scrape: "true"
+        {{- end }}
+      labels:
+        app: terraform-enterprise
+        {{- if .Values.pod.labels }}
+        {{- toYaml .Values.pod.labels | nindent 8 }}
+        {{- end }}
+    spec:
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+      affinity:
+        {{- toYaml .Values.affinity | nindent 8 }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      tolerations:
+        {{- toYaml .Values.tolerations | nindent 8 }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      volumes:
+        {{- if and .Values.tlsCertificate .Values.tlsPrivateKey }}
+        # GCP Marketplace TLS certificates
+        - name: certificates
+          secret:
+            secretName: terraform-enterprise-tls-gcp
+        {{- else }}
+        - name: certificates
+          secret:
+            secretName: {{ .Values.tls.certificateSecret }}
+        {{- end }}
+        {{- if or (and .Values.tlsSecondary.certData .Values.tlsSecondary.keyData) .Values.tlsSecondary.certificateSecret }}
+        - name: certificates-secondary
+          secret:
+            secretName: {{ .Values.tlsSecondary.certificateSecret | default "terraform-enterprise-certificates-secondary" }}
+        {{- end }}
+        {{- if .Values.tlsCACertificate }}
+        # GCP Marketplace CA certificate
+        - name: ca-certificates
+          secret:
+            secretName: terraform-enterprise-ca-gcp
+        {{- else if .Values.tls.caCertData }}
+        - name: ca-certificates
+          secret:
+            secretName: terraform-enterprise-ca-certificates
+        {{- end }}
+        {{- if and .Values.tlsRedis.certData .Values.tlsRedis.keyData .Values.tlsRedis.caCertData }}
+        - name: certificates-redis
+          secret:
+            secretName: {{ .Values.tlsRedis.certificateSecret | default "terraform-enterprise-certificates-redis" }}
+        {{- end }}
+        {{- if and .Values.tlsRedisSidekiq.certData .Values.tlsRedisSidekiq.keyData .Values.tlsRedisSidekiq.caCertData }}
+        - name: certificates-redis-sidekiq
+          secret:
+            secretName: {{ .Values.tlsRedisSidekiq.certificateSecret | default "terraform-enterprise-certificates-redis-sidekiq" }}
+        {{- end }}
+        {{- if .Values.csi.enabled }}
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: "{{ .Values.csi.secretProviderClass }}"
+        {{- end }}
+        {{- if .Values.ubbagent.enabled }}
+        - name: ubbagent-config
+          configMap:
+            name: {{ .Release.Name }}-ubbagent-config
+        - name: ubbagent-state
+          emptyDir: {}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.tfeServiceAccount }}
+      serviceAccountName: {{ .Values.tfeServiceAccount }}
+      {{- else if .Values.serviceAccount }}
+      {{- if .Values.serviceAccount.enabled }}
+      {{- if .Values.serviceAccount.name }}
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      {{- else }}
+      serviceAccountName: {{ .Release.Namespace }}
+      {{- end }}
+      {{- end }}
+      {{- end }}
+      initContainers:
+        {{- if .Values.configConnector.enabled }}
+        # Setup Workload Identity binding and wait for Config Connector infrastructure
+        - name: wait-for-infra
+          image: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+          command:
+          - /bin/bash
+          - -c
+          - |
+            set -e
+
+            # =================================================================
+            # Step 0: Install kubectl (not included in cloud-sdk:slim)
+            # =================================================================
+            echo "Installing kubectl..."
+            apt-get update -qq && apt-get install -qq -y kubectl >/dev/null 2>&1 || {
+              echo "Installing kubectl via gcloud components..."
+              gcloud components install kubectl --quiet 2>/dev/null || true
+            }
+
+            # =================================================================
+            # Step 1: Config Connector cluster mode check
+            # In cluster mode, a single controller manages all namespaces.
+            # No per-namespace ConfigConnectorContext or WI binding needed.
+            # =================================================================
+            echo "Config Connector cluster mode - no per-namespace setup required"
+            echo "Namespace: {{ .Release.Namespace }}"
+
+            # =================================================================
+            # Step 2: Wait for Config Connector infrastructure to be ready
+            # In cluster mode, the cluster-wide controller processes CC resources
+            # in all namespaces. We wait for the resources to become Ready.
+            # =================================================================
+            echo "Waiting for Config Connector infrastructure to be ready..."
+
+            # Wait for SQLInstance to be ready (can take 10-15 minutes)
+            echo "Waiting for Cloud SQL instance..."
+            for i in $(seq 1 60); do
+              STATUS=$(kubectl get sqlinstance {{ .Release.Name }}-postgres -n {{ .Release.Namespace }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "NotFound")
+              if [ "$STATUS" = "True" ]; then
+                echo "Cloud SQL instance is ready"
+                break
+              fi
+              echo "Cloud SQL status: $STATUS - waiting... ($i/60)"
+              sleep 30
+            done
+
+            # Wait for Redis instance to be ready
+            echo "Waiting for Redis instance..."
+            for i in $(seq 1 30); do
+              STATUS=$(kubectl get redisinstance {{ .Release.Name }}-redis -n {{ .Release.Namespace }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "NotFound")
+              if [ "$STATUS" = "True" ]; then
+                echo "Redis instance is ready"
+                break
+              fi
+              echo "Redis status: $STATUS - waiting... ($i/30)"
+              sleep 30
+            done
+
+            # Wait for GCS bucket to be ready
+            echo "Waiting for GCS bucket..."
+            for i in $(seq 1 30); do
+              STATUS=$(kubectl get storagebucket {{ .Release.Name }}-storage -n {{ .Release.Namespace }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "NotFound")
+              if [ "$STATUS" = "True" ]; then
+                echo "GCS bucket is ready"
+                break
+              fi
+              echo "GCS bucket status: $STATUS - waiting... ($i/30)"
+              sleep 10
+            done
+
+            # =================================================================
+            # Step 4: Get infrastructure endpoints and create ConfigMap/Secret
+            # =================================================================
+            SQL_HOST=$(kubectl get sqlinstance {{ .Release.Name }}-postgres -n {{ .Release.Namespace }} -o jsonpath='{.status.privateIpAddress}')
+            REDIS_HOST=$(kubectl get redisinstance {{ .Release.Name }}-redis -n {{ .Release.Namespace }} -o jsonpath='{.status.host}')
+            REDIS_PORT=$(kubectl get redisinstance {{ .Release.Name }}-redis -n {{ .Release.Namespace }} -o jsonpath='{.status.port}')
+            GCS_BUCKET={{ .Values.configConnector.projectId }}-{{ .Release.Name }}-tfe
+
+            echo "Infrastructure endpoints:"
+            echo "  SQL Host: $SQL_HOST"
+            echo "  Redis Host: $REDIS_HOST:$REDIS_PORT"
+            echo "  GCS Bucket: $GCS_BUCKET"
+
+            # Create/update ConfigMap with TFE environment variables
+            kubectl create configmap {{ .Release.Name }}-infra-endpoints \
+              --namespace {{ .Release.Namespace }} \
+              --from-literal=TFE_DATABASE_HOST="$SQL_HOST" \
+              --from-literal=TFE_DATABASE_NAME="tfe" \
+              --from-literal=TFE_DATABASE_USER="{{ .Release.Name }}-user" \
+              --from-literal=TFE_REDIS_HOST="$REDIS_HOST:$REDIS_PORT" \
+              --from-literal=TFE_REDIS_USE_AUTH="true" \
+              --from-literal=TFE_OBJECT_STORAGE_TYPE="google" \
+              --from-literal=TFE_OBJECT_STORAGE_GOOGLE_BUCKET="$GCS_BUCKET" \
+              --from-literal=TFE_OBJECT_STORAGE_GOOGLE_PROJECT="{{ .Values.configConnector.projectId }}" \
+              --dry-run=client -o yaml | kubectl apply -f -
+
+            # Get credentials
+            DB_PASSWORD=$(kubectl get secret {{ .Release.Name }}-db-credentials -n {{ .Release.Namespace }} -o jsonpath='{.data.password}' | base64 -d)
+
+            # Get Redis auth string (wait for it to be populated)
+            REDIS_AUTH=""
+            for i in $(seq 1 30); do
+              REDIS_AUTH=$(kubectl get redisinstance {{ .Release.Name }}-redis -n {{ .Release.Namespace }} -o jsonpath='{.status.observedState.authString}' 2>/dev/null || echo "")
+              if [ -n "$REDIS_AUTH" ]; then
+                echo "Redis auth string retrieved"
+                break
+              fi
+              echo "Waiting for Redis auth string... ($i/30)"
+              sleep 10
+            done
+
+            kubectl create secret generic {{ .Release.Name }}-infra-secrets \
+              --namespace {{ .Release.Namespace }} \
+              --from-literal=TFE_DATABASE_PASSWORD="$DB_PASSWORD" \
+              --from-literal=TFE_REDIS_PASSWORD="$REDIS_AUTH" \
+              --dry-run=client -o yaml | kubectl apply -f -
+
+            echo "Infrastructure ConfigMap and Secret created successfully!"
+        {{- end }}
+        {{- if .Values.initContainers }}
+        {{- toYaml .Values.initContainers | nindent 8 }}
+        {{- end }}
+      containers:
+      - name: terraform-enterprise
+        {{- if .Values.tfeImage }}
+        image: {{ .Values.tfeImage }}
+        {{- else if .Values.image.name }}
+        image: {{ .Values.image.repository }}/{{ .Values.image.name }}:{{ .Values.image.tag }}
+        {{- else }}
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        {{- end }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        securityContext:
+        {{- if and .Values.openshift.enabled (not .Values.container.securityContext) }}
+          seccompProfile:
+            type: RuntimeDefault
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          runAsNonRoot: true
+        {{- else }}
+        {{- toYaml .Values.container.securityContext | nindent 10 }}
+        {{- end }}
+        {{- with (include "helpers.list-valueFrom-variables" .) }}
+        env:
+          {{- . | indent 10 }}
+        {{- end }}
+        envFrom:
+          - configMapRef:
+              name: terraform-enterprise-env-config
+        {{- if .Values.configConnector.enabled }}
+          # Config Connector provisioned infrastructure endpoints
+          - configMapRef:
+              name: {{ .Release.Name }}-infra-endpoints
+          - secretRef:
+              name: {{ .Release.Name }}-infra-secrets
+        {{- end }}
+        {{- if .Values.env.configMapRefs }}
+          {{- range .Values.env.configMapRefs }}
+          - configMapRef:
+              name: {{ .name }}
+          {{- end }}
+        {{- end }}
+          - secretRef:
+              name: terraform-enterprise-env-secrets
+        {{- if .Values.env.secretRefs }}
+          {{- range .Values.env.secretRefs }}
+          - secretRef:
+              name: {{ .name }}
+          {{- end }}
+        {{- end }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.tfe.readinessProbePath | default "/api/v1/health/readiness" }}
+            port: {{ .Values.tfe.privateHttpPort }}
+            scheme: {{ .Values.tfe.readinessProbeScheme | default "HTTP"  }}
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+        volumeMounts:
+          {{- if or (and .Values.tlsSecondary.certData .Values.tlsSecondary.keyData) .Values.tlsSecondary.certificateSecret }}
+          - name: certificates-secondary
+            mountPath: {{ .Values.tlsSecondary.certMountPath }}
+            subPath: tls.crt
+          - name: certificates-secondary
+            mountPath: {{ .Values.tlsSecondary.keyMountPath }}
+            subPath: tls.key        
+          {{- end }}  
+          - name: certificates
+            mountPath: {{ .Values.tls.certMountPath }}
+            subPath: tls.crt
+          - name: certificates
+            mountPath: {{ .Values.tls.keyMountPath }}
+            subPath: tls.key
+          {{- if .Values.tlsCACertificate }}
+          # GCP Marketplace CA certificate
+          - name: ca-certificates
+            mountPath: /etc/ssl/private/ca-certificate.crt
+            subPath: ca.crt
+          {{- else if .Values.tls.caCertData }}
+          - name: ca-certificates
+            mountPath: {{ include "cacert.path" . }}
+            subPath: {{ .Values.tls.caCertFileName }}
+          {{- end }}
+          {{- if and .Values.tlsRedis.certData .Values.tlsRedis.keyData .Values.tlsRedis.caCertData }}
+          - name: certificates-redis
+            mountPath: {{ .Values.tlsRedis.certMountPath }}
+            subPath: tls.crt
+          - name: certificates-redis
+            mountPath: {{ .Values.tlsRedis.keyMountPath }}
+            subPath: tls.key
+          - name: certificates-redis
+            mountPath: {{ .Values.tlsRedis.caCertMountPath }}
+            subPath: tls.ca
+          {{- end }}
+          {{- if and .Values.tlsRedisSidekiq.certData .Values.tlsRedisSidekiq.keyData .Values.tlsRedisSidekiq.caCertData }}
+          - name: certificates-redis-sidekiq
+            mountPath: {{ .Values.tlsRedisSidekiq.certMountPath }}
+            subPath: tls.crt
+          - name: certificates-redis-sidekiq
+            mountPath: {{ .Values.tlsRedisSidekiq.keyMountPath }}
+            subPath: tls.key
+          - name: certificates-redis-sidekiq
+            mountPath: {{ .Values.tlsRedisSidekiq.caCertMountPath }}
+            subPath: tls.ca
+          {{- end }}
+          {{- if .Values.csi.enabled }}
+          - name: secrets-store
+            mountPath: "{{ .Values.csi.mountPath }}"
+            readOnly: true
+          {{- end }}
+          {{- with .Values.extraVolumeMounts }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
+        ports:
+        - containerPort: {{ .Values.tfe.privateHttpPort }}
+        - containerPort: {{ .Values.tfe.privateHttpsPort }}
+        - containerPort: {{ .Values.tfe.adminHttpsPort }}
+        {{- if .Values.tfe.metrics.enable }}
+        - containerPort: {{.Values.tfe.metrics.httpPort}}
+        - containerPort: {{.Values.tfe.metrics.httpsPort}}
+        {{- end }}
+      {{- if .Values.ubbagent.enabled }}
+      # GCP Marketplace Usage-Based Billing (UBB) Agent sidecar
+      - name: ubbagent
+        image: {{ .Values.ubbagent.image }}
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: AGENT_CONFIG_FILE
+          value: /etc/ubbagent/config.yaml
+        - name: AGENT_LOCAL_PORT
+          value: "4567"
+        - name: AGENT_STATE_DIR
+          value: /var/lib/ubbagent
+        - name: AGENT_ENCODED_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.reportingSecret }}
+              key: reporting-key
+        - name: AGENT_CONSUMER_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.reportingSecret }}
+              key: consumer-id
+        volumeMounts:
+        - name: ubbagent-config
+          mountPath: /etc/ubbagent
+        - name: ubbagent-state
+          mountPath: /var/lib/ubbagent
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+      {{- end }}

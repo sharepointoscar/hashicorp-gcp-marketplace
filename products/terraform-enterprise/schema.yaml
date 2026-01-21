@@ -1,19 +1,246 @@
-# schema.yaml - Image URI mapping for GCP Marketplace Terraform K8s App
-# Reference: https://github.com/GoogleCloudPlatform/marketplace-tools/blob/master/docs/terraform-k8s-app/terraform-k8s-app-packaging-guide.md
-#
-# This maps Docker image URIs to Terraform variables.
-# GCP Marketplace automatically replaces these variables with the published image URIs.
+x-google-marketplace:
+  schemaVersion: v2
+  applicationApiVersion: v1beta1
+  publishedVersion: '1.1.3'
+  publishedVersionMetadata:
+    releaseNote: "Terraform Enterprise for GCP Marketplace"
+    releaseTypes:
+    - Feature
+    recommended: true
+  partnerId: hashicorp
+  solutionId: terraform-enterprise
 
-images:
-  tfe:
-    variables:
-      tfe_image_repo:
-        type: REPO_WITH_REGISTRY_WITH_NAME
-      tfe_image_tag:
-        type: TAG
-  ubbagent:
-    variables:
-      ubbagent_image_repo:
-        type: REPO_WITH_REGISTRY_WITH_NAME
-      ubbagent_image_tag:
-        type: TAG
+  clusterConstraints:
+    resources:
+    - replicas: 1
+      requests:
+        cpu: 2000m
+        memory: 4Gi
+
+  images:
+    '':
+      properties:
+        tfeImage:
+          type: FULL
+    ubbagent:
+      properties:
+        ubbagentImage:
+          type: FULL
+
+properties:
+  name:
+    type: string
+    x-google-marketplace:
+      type: NAME
+
+  namespace:
+    type: string
+    x-google-marketplace:
+      type: NAMESPACE
+
+  # ---------------------------------------------------------------------------
+  # Config Connector - Auto-provision Infrastructure
+  # When enabled, Cloud SQL, Redis, and GCS are provisioned automatically
+  # ---------------------------------------------------------------------------
+
+  configConnector.enabled:
+    type: boolean
+    title: Enable Auto-Provisioning
+    description: "Auto-provision Cloud SQL, Redis, and GCS using Config Connector (requires Config Connector in cluster)"
+    default: true
+
+  configConnector.projectId:
+    type: string
+    title: GCP Project ID
+    description: "GCP project ID for provisioning infrastructure"
+
+  configConnector.googleServiceAccount:
+    type: string
+    title: Config Connector Google Service Account
+    description: "GSA email with permissions for Cloud SQL, Redis, GCS (e.g., tfe-cc@project.iam.gserviceaccount.com)"
+
+  configConnector.networkName:
+    type: string
+    title: VPC Network Name
+    description: "VPC network for private connectivity"
+    default: "default"
+
+  configConnector.sql.region:
+    type: string
+    title: Cloud SQL Region
+    default: "us-central1"
+
+  configConnector.sql.tier:
+    type: string
+    title: Cloud SQL Machine Type
+    description: "Machine type for Cloud SQL instance"
+    default: "db-custom-4-16384"
+
+  configConnector.redis.region:
+    type: string
+    title: Redis Region
+    default: "us-central1"
+
+  configConnector.redis.memorySizeGb:
+    type: integer
+    title: Redis Memory (GB)
+    default: 4
+
+  configConnector.gcs.location:
+    type: string
+    title: GCS Bucket Location
+    default: "US"
+
+  # ---------------------------------------------------------------------------
+  # Infrastructure (only required if configConnector.enabled=false)
+  # ---------------------------------------------------------------------------
+
+  databaseHost:
+    type: string
+    title: Database Host
+    description: "Cloud SQL PostgreSQL private IP (only if not auto-provisioning)"
+
+  databaseName:
+    type: string
+    title: Database Name
+    default: "tfe"
+
+  databaseUser:
+    type: string
+    title: Database User
+    default: "tfe"
+
+  databasePassword:
+    type: string
+    title: Database Password
+    description: "PostgreSQL password for TFE user"
+    x-google-marketplace:
+      type: MASKED_FIELD
+
+  redisHost:
+    type: string
+    title: Redis Host
+    description: "Memorystore Redis private IP (only if not auto-provisioning)"
+
+  redisPassword:
+    type: string
+    title: Redis Auth String
+    description: "Memorystore Redis AUTH string"
+    x-google-marketplace:
+      type: MASKED_FIELD
+
+  objectStorageBucket:
+    type: string
+    title: GCS Bucket Name
+    description: "GCS bucket for TFE object storage (only if not auto-provisioning)"
+
+  objectStorageProject:
+    type: string
+    title: GCP Project ID (Storage)
+    description: "GCP project ID where the GCS bucket resides"
+
+  # ---------------------------------------------------------------------------
+  # TFE Configuration
+  # ---------------------------------------------------------------------------
+
+  hostname:
+    type: string
+    title: TFE Hostname (FQDN)
+    description: "Fully qualified domain name for TFE (e.g., tfe.example.com)"
+
+  tfeLicense:
+    type: string
+    title: TFE License (base64)
+    description: "Base64-encoded TFE license file content"
+    x-google-marketplace:
+      type: MASKED_FIELD
+
+  encryptionPassword:
+    type: string
+    title: Encryption Password
+    description: "Encryption password for TFE data (minimum 16 characters)"
+    x-google-marketplace:
+      type: MASKED_FIELD
+
+  # ---------------------------------------------------------------------------
+  # TLS Certificates (base64-encoded)
+  # ---------------------------------------------------------------------------
+
+  tlsCertificate:
+    type: string
+    title: TLS Certificate (base64)
+    description: "Base64-encoded TLS certificate (PEM format)"
+    x-google-marketplace:
+      type: MASKED_FIELD
+
+  tlsPrivateKey:
+    type: string
+    title: TLS Private Key (base64)
+    description: "Base64-encoded TLS private key (PEM format)"
+    x-google-marketplace:
+      type: MASKED_FIELD
+
+  tlsCACertificate:
+    type: string
+    title: CA Certificate (base64)
+    description: "Base64-encoded CA certificate bundle (PEM format)"
+    x-google-marketplace:
+      type: MASKED_FIELD
+
+  # ---------------------------------------------------------------------------
+  # Service Account for Workload Identity
+  # ---------------------------------------------------------------------------
+
+  tfeServiceAccount:
+    type: string
+    title: TFE Service Account
+    x-google-marketplace:
+      type: SERVICE_ACCOUNT
+      serviceAccount:
+        description: "TFE service account for GCS access via Workload Identity"
+        roles:
+        - type: Role
+          rulesType: CUSTOM
+          rules:
+          - apiGroups: ['']
+            resources: ['secrets', 'configmaps']
+            verbs: ['get', 'list', 'watch', 'create', 'update', 'delete']
+        - type: Role
+          rulesType: CUSTOM
+          rules:
+          - apiGroups: ['sql.cnrm.cloud.google.com']
+            resources: ['sqlinstances', 'sqldatabases', 'sqlusers']
+            verbs: ['get', 'list', 'watch']
+        - type: Role
+          rulesType: CUSTOM
+          rules:
+          - apiGroups: ['redis.cnrm.cloud.google.com']
+            resources: ['redisinstances']
+            verbs: ['get', 'list', 'watch']
+        - type: Role
+          rulesType: CUSTOM
+          rules:
+          - apiGroups: ['storage.cnrm.cloud.google.com']
+            resources: ['storagebuckets', 'storagebucketaccesscontrols']
+            verbs: ['get', 'list', 'watch']
+
+  # ---------------------------------------------------------------------------
+  # Billing / Reporting
+  # ---------------------------------------------------------------------------
+
+  reportingSecret:
+    type: string
+    x-google-marketplace:
+      type: REPORTING_SECRET
+
+required:
+  - name
+  - namespace
+  - configConnector.projectId
+  - hostname
+  - tfeLicense
+  - encryptionPassword
+  - tlsCertificate
+  - tlsPrivateKey
+  - tlsCACertificate
+  - reportingSecret

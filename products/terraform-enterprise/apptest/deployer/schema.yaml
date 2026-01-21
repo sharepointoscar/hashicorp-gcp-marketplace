@@ -1,0 +1,211 @@
+x-google-marketplace:
+  schemaVersion: v2
+  applicationApiVersion: v1beta1
+  publishedVersion: '1.1.3'
+  publishedVersionMetadata:
+    releaseNote: "Terraform Enterprise for GCP Marketplace - Test Schema"
+  partnerId: hashicorp
+  solutionId: terraform-enterprise
+
+  clusterConstraints:
+    resources:
+    - replicas: 1
+      requests:
+        cpu: 2000m
+        memory: 4Gi
+
+  images:
+    '':
+      properties:
+        tfeImage:
+          type: FULL
+    ubbagent:
+      properties:
+        ubbagentImage:
+          type: FULL
+    tester:
+      properties:
+        testerImage:
+          type: FULL
+
+properties:
+  name:
+    type: string
+    default: terraform-enterprise
+    x-google-marketplace:
+      type: NAME
+
+  namespace:
+    type: string
+    x-google-marketplace:
+      type: NAMESPACE
+
+  # Config Connector - enable auto-provisioning for tests
+  configConnector.enabled:
+    type: boolean
+    default: true
+
+  configConnector.projectId:
+    type: string
+    default: "ibm-software-mp-project-test"
+
+  configConnector.googleServiceAccount:
+    type: string
+    default: "tfe-config-connector@ibm-software-mp-project-test.iam.gserviceaccount.com"
+
+  configConnector.networkName:
+    type: string
+    default: "default"
+
+  configConnector.sql.region:
+    type: string
+    default: "us-central1"
+
+  configConnector.sql.tier:
+    type: string
+    default: "db-custom-2-8192"
+
+  configConnector.redis.region:
+    type: string
+    default: "us-central1"
+
+  configConnector.redis.memorySizeGb:
+    type: integer
+    default: 4
+
+  configConnector.gcs.location:
+    type: string
+    default: "US"
+
+  # Disable IAM for GCS - StorageBucketAccessControl requires Workload Identity
+  # binding which doesn't exist for dynamic test namespaces
+  configConnector.gcs.enableIAM:
+    type: boolean
+    default: false
+
+  # Agents namespace and RBAC - disabled for mpdev verify (deployer can't create cluster-scoped resources)
+  agents.namespace.enabled:
+    type: boolean
+    default: false
+
+  agents.rbac.enabled:
+    type: boolean
+    default: false
+
+  # Infrastructure - not required when configConnector.enabled=true
+  databaseHost:
+    type: string
+    default: ""
+
+  databaseName:
+    type: string
+    default: "tfe"
+
+  databaseUser:
+    type: string
+    default: "tfe"
+
+  databasePassword:
+    type: string
+    default: ""
+    x-google-marketplace:
+      type: MASKED_FIELD
+
+  redisHost:
+    type: string
+    default: ""
+
+  redisPassword:
+    type: string
+    default: ""
+    x-google-marketplace:
+      type: MASKED_FIELD
+
+  objectStorageBucket:
+    type: string
+    default: ""
+
+  objectStorageProject:
+    type: string
+    default: "ibm-software-mp-project-test"
+
+  # TFE Configuration - test defaults
+  hostname:
+    type: string
+    default: "tfe.example.com"
+
+  tfeLicense:
+    type: string
+    default: "02MV4UU43BK5HGYYTOJZWFQMTMNNEWU33JLJDVC6KNNJBGYTKXLF2E2MSFPBGUGMBUJVLUK6SMKRNGWWSUJF2FUVCKNBNFIVTJLJKGGNKOIRETCSLJO5UVSM2WPJSEOOLULJMEUZTBK5IWST3JJF3U26SRPFHUOWTMLFUTA6SNK5IXQTCXKV3U6V2NORMWU3DIJVJTA6CNIRUGQT2XKE2U2VCBGJHVIQLJJRBUU4DCNZHDAWKXPBZVSWCSOBRDENLGMFLVC2KPNFEXCSLJO5UWCWCOPJSFOVTGMRDWY5C2KNETMSLKJF3U22SVORGVISLUJVKFMVKNNJGTMTL2M43E2RCNOVHGUWJRJ5CFCNCPIRGTAV3JJFZUS3SOGBMVQSRQLAZVE4DCK5KWST3JJF4U2RCJGFGFIRLZJRKEKMKWIRAXOT3KIF3U62SBO5LWSSLTJFWVMNDDI5WHSWKYKJYGEMRVMZSEO3DULJJUSNSJNJEXOTLKLF2E2RCNORGXURSVJVCECNSNIRATMTKEIJQUS2LXNFSEOVTZMJLWY5KZLBJHAYRSGVTGIR3MORNFGSJWJFVES52NNJMXITKEJV2E26SGKVGUIQJWJVCECNSNIRBGCSLJO5UWGSCKOZNEQVTKMRBUSNSJNZJGYY3OJJUFU3JZPFRFGSLTJFWVU42ZK5SHUSLKOA3WMWBQHUXFS3CTGJKEIMDWKAVTSMCOO5YFEZKBIR3WWYKRPFJTSSDXONZU2WLPONUVGY3EI42VUUJZIRCFKVCYNY3U2MCXOVKVAMDVKNQTQSTPGQ2WMNBQJA2HMTZYME2VSODOHFCWUMBUIRCFUMLEIFVWGYJUMRLDAMZTHBIHO3KWNRQXMSSQGRYEU6CJJE4UINSVIZGFKYKWKBVGWV2KORRUINTQMFWDM32PMZDW4SZSPJIEWSSSNVDUQVRTMVNHO4KGMUVW6N3LF5ZSWQKUJZUFAWTHKMXUWVSZM4XUWK3MI5IHOTBXNJBHQSJXI5HWC2ZWKVQWSYKIN5SWWMCSKRXTOMSEKE6T2"
+    x-google-marketplace:
+      type: MASKED_FIELD
+
+  encryptionPassword:
+    type: string
+    default: "test-encryption-pw-16chars"
+    x-google-marketplace:
+      type: MASKED_FIELD
+
+  # TLS - real test certificates from test-certs/
+  tlsCertificate:
+    type: string
+    default: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURQRENDQWlTZ0F3SUJBZ0lVTmE1VFd4Sm0xNmpmbFZxaXM2Mk81d2cwZjhnd0RRWUpLb1pJaHZjTkFRRUwKQlFBd0dqRVlNQllHQTFVRUF3d1BkR1psTG1WNFlXMXdiR1V1WTI5dE1CNFhEVEkyTURFeE5ERTVNVGd4TmxvWApEVEkzTURFeE5ERTVNVGd4Tmxvd0dqRVlNQllHQTFVRUF3d1BkR1psTG1WNFlXMXdiR1V1WTI5dE1JSUJJakFOCkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQXVCVGtidU9DcjYxUnNuWC9FeEZyOGVjcEJ2azIKVnVPMW5xUU8xdHB0amJRclIwL2RQSEZOd3RQckxjc2M2aTJqRmdzWW80SGM2TmZLNzVuMmMrRHNJTGs0SW1CcwpydHZiT0Z6amJ3QXpBRnZ1Yi96N1VxU2U2ek1nMDJiSld2YzdZZDlhb3VFQ1pNR2FEclVPUzZIbENvdmcwTXNTCmQ2dE5ia1BZZksxZXJnMURQbkxCV29NU1FWM21TS3JkdTg0NTFlN1p3UDBSbGxIMnhKZllrTnpHTWlIVlNBelAKSzVDNytuQ0VCSkNla2FKQWNrOWV0MjJ6Nm94Rmh2b2JKK2g1STZETngweVAyUzJuc2todGY0R0xVRzM3UFhzdgp6Qzg4cnZSazBOUy9CZTNlZFQxY2lmb3VqdElqUGxBVGZ2b0sxN1d5bTVkSU5BcFVQUTJJWGE0Snl3SURBUUFCCm8zb3dlREFkQmdOVkhRNEVGZ1FVZURVOUhvNktwSE5BdU1Cd2NMb0x4d1A2QW9jd0h3WURWUjBqQkJnd0ZvQVUKZURVOUhvNktwSE5BdU1Cd2NMb0x4d1A2QW9jd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBbEJnTlZIUkVFSGpBYwpnZzkwWm1VdVpYaGhiWEJzWlM1amIyMkNDV3h2WTJGc2FHOXpkREFOQmdrcWhraUc5dzBCQVFzRkFBT0NBUUVBCm5ZKzh4UUh3NkdxcG11dlNQSGgyQ3ExWC9OUzV4clFrdGtrdHlucFhjK1ZnR3p2Rk5RdUJDZ1lXMmdzQUZjeTUKWGdudWZRRmt0bUFhcGh4MkZVemJuUTZMWVdzZWloWXRiRlgwT0NqQkdaZURGRlpBYmp1UEQ1dTdpVXNxczZoYQpoY2JLdG8wYjlrMW01VWk1M1FIN0wzN1U5eDAvOHJIWGF2YnorQ1poRWRpa1VDaFdPMnMwZ0NsUWtNSTY5SGxmCjlxbW5DbW1uS0hjRVZaNytJMFF1Wkp3d0JqY1F6VWQ4L24rclJRalk0djQzUkhRcEYwd3RxMGsyaVd0aWpidHEKajFIWGdxaW82RjlzV1U1MXBtcldVbVEvQUh5MjM1VHczRXAwcWVFNmFVVjFTM2pJcXlyTW1sbVBZWHZuaWVDNApoZ3lLRC9va1gzMmVUMjhDc0ZzMnl3PT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo="
+    x-google-marketplace:
+      type: MASKED_FIELD
+
+  tlsPrivateKey:
+    type: string
+    default: "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2UUlCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktjd2dnU2pBZ0VBQW9JQkFRQzRGT1J1NDRLdnJWR3kKZGY4VEVXdng1eWtHK1RaVzQ3V2VwQTdXMm0yTnRDdEhUOTA4Y1UzQzArc3R5eHpxTGFNV0N4aWpnZHpvMThydgptZlp6NE93Z3VUZ2lZR3l1MjlzNFhPTnZBRE1BVys1di9QdFNwSjdyTXlEVFpzbGE5enRoMzFxaTRRSmt3Wm9PCnRRNUxvZVVLaStEUXl4SjNxMDF1UTloOHJWNnVEVU0rY3NGYWd4SkJYZVpJcXQyN3pqblY3dG5BL1JHV1VmYkUKbDlpUTNNWXlJZFZJRE04cmtMdjZjSVFFa0o2Um9rQnlUMTYzYmJQcWpFV0craHNuNkhram9NM0hUSS9aTGFleQpTRzEvZ1l0UWJmczlleS9NTHp5dTlHVFExTDhGN2Q1MVBWeUoraTZPMGlNK1VCTisrZ3JYdGJLYmwwZzBDbFE5CkRZaGRyZ25MQWdNQkFBRUNnZ0VBRHgxQUNFN0wyeXJLNjNFK3lVMEQ1Ty9LOFpTaXZvMmh5dTNEZmlhZkdpUngKN1VBRWRVTUVWSHZiOG4yYjJTcDRHb1k4dHFnaUFFZy9sRjY2MnBiY0xHK295VUhMaXF2b212OGRlVzYxd1ZETApDZ3ptZ2NtY2RzbFM1NmluM2IwdzlmOUZ6TnZXdTNrZDhoa3huRW9scVRFRSszL0ErMnhvUmlaeDd3SzVKR2MwClVOcW1vckdRRlZyeXBrWTNzQXU1YUh2VmFqdHgvWXdnWjQvYXd0VkhmcFVRM3dVdkFwVHpwZDM3aVEvZjdjMHYKd2ZEWTRCeDJxaElBa0tZODg2NWN0Q0xnL3UzUEtxYS9UK05hWXJncWxzSDFQRDNWdHJpcmI4b00xTlRXUUVEbwpZUFVUdTgwZktON1E2ekdOLzY5MjUwU1d3eGJNenl3Q0tEbWQ2TjFiTVFLQmdRRDhnQ0dPR1hmdWxrblRqcnVVClkveHFOSndzeGlMbnBBRVV2ZG0vb1VWWGJrLzZYWU1ld3FnYjNGN08vSmZWWUpQcWh5WFJVV1NlWUZWSm05OTMKam5aTUF1bi9HakV0cVJXNy9CQ1VhQnBtVWtCd1dmQ1c5Wkx2T3orT2R6VGFQMnQycW5aL2tLV3BRYW8vTDFGYgpnSk81Vms0a2xjbCs0aUx0VzZSUjBvejdPUUtCZ1FDNm9nTUM4d0xyWkNTVTFUT080b2N4TWpsckZlM05PVDZSCm84WlAvcXU3UlpPL21xZzdEYzRGTE1tUWlnV1Zma093SFVjQ2g1dHZWZklwSVluN3FnamYvRDU4QUJZeGZ6YmsKeUlDNE5ycDdHMXpoT2tSVXg2ZGhSTkp5WnEwRk41WlBKNThDbklURGJ6aDArSkNTNitzcXNucHd4NHlkSDlENgpmbmRXSERnNUl3S0JnUUQ1RWsrSFEzbzVvSWhNcHNSRU9XajVQdEk3bkdzOEFseUtvRWZXTHZnZXFaTTlEZGRVCmxZR01raEgzcmRUOFI1dEJRblU4aUVSdnNla1BoakdtVnFJOGtyZE56QUZzNEJpdmFaTFZRZWVndlV3UlI3YjYKd2wxaG5Sa3hxRWM3YmtuTU1aUlllMC9lcVFhTjgxZ1dvYnVXbkJyVEhlbzRQa3RqeGYxT05ScWFpUUtCZ0VKOQorQjZ6MzZWbnIxVExSS3d5YnNJTFI4T3NNMlg3Y0J4SlFoMDcrWWtsOThhNjNoYjBDeU55Mm5sQmcwM0loMnNXCmN6Y21neTArYktGVXpxazM0aU9TNWR3ZDE4cFlyWUVESWtEL1ZwOEhsNmF5c0tlWDNqMWNYTEhmZk9Ndjg4Qk4KdUd3Z3dYZ3podVM5cmh4Nkt2V3lVc2NkZ1M1MXFHbW1adlBwNStvTEFvR0FmRXk5S0cxSUxTNkdoaHZ1akc5MgpxazVSdzVkYWpOQWgvekxEMFE2bU5QYnlpUU5Zekc3cm1yeWRxdnNPTjkxLzFZVFVqTTBIL1RYRWttYmNHVkpRClMycEtZVXJXeWhGRFBUTzNZM2k4NW5WSEJUSFRMYkhvSlFNVjcxbER4cS9haEt4ejZaZ1BBZGs5VXNyRVlYVXEKVjdVT1BtUzNEUTZEVXVUMS9YaU1KMTg9Ci0tLS0tRU5EIFBSSVZBVEUgS0VZLS0tLS0K"
+    x-google-marketplace:
+      type: MASKED_FIELD
+
+  tlsCACertificate:
+    type: string
+    default: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURQRENDQWlTZ0F3SUJBZ0lVTmE1VFd4Sm0xNmpmbFZxaXM2Mk81d2cwZjhnd0RRWUpLb1pJaHZjTkFRRUwKQlFBd0dqRVlNQllHQTFVRUF3d1BkR1psTG1WNFlXMXdiR1V1WTI5dE1CNFhEVEkyTURFeE5ERTVNVGd4TmxvWApEVEkzTURFeE5ERTVNVGd4Tmxvd0dqRVlNQllHQTFVRUF3d1BkR1psTG1WNFlXMXdiR1V1WTI5dE1JSUJJakFOCkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQXVCVGtidU9DcjYxUnNuWC9FeEZyOGVjcEJ2azIKVnVPMW5xUU8xdHB0amJRclIwL2RQSEZOd3RQckxjc2M2aTJqRmdzWW80SGM2TmZLNzVuMmMrRHNJTGs0SW1CcwpydHZiT0Z6amJ3QXpBRnZ1Yi96N1VxU2U2ek1nMDJiSld2YzdZZDlhb3VFQ1pNR2FEclVPUzZIbENvdmcwTXNTCmQ2dE5ia1BZZksxZXJnMURQbkxCV29NU1FWM21TS3JkdTg0NTFlN1p3UDBSbGxIMnhKZllrTnpHTWlIVlNBelAKSzVDNytuQ0VCSkNla2FKQWNrOWV0MjJ6Nm94Rmh2b2JKK2g1STZETngweVAyUzJuc2todGY0R0xVRzM3UFhzdgp6Qzg4cnZSazBOUy9CZTNlZFQxY2lmb3VqdElqUGxBVGZ2b0sxN1d5bTVkSU5BcFVQUTJJWGE0Snl3SURBUUFCCm8zb3dlREFkQmdOVkhRNEVGZ1FVZURVOUhvNktwSE5BdU1Cd2NMb0x4d1A2QW9jd0h3WURWUjBqQkJnd0ZvQVUKZURVOUhvNktwSE5BdU1Cd2NMb0x4d1A2QW9jd0R3WURWUjBUQVFIL0JBVXdBd0VCL3pBbEJnTlZIUkVFSGpBYwpnZzkwWm1VdVpYaGhiWEJzWlM1amIyMkNDV3h2WTJGc2FHOXpkREFOQmdrcWhraUc5dzBCQVFzRkFBT0NBUUVBCm5ZKzh4UUh3NkdxcG11dlNQSGgyQ3ExWC9OUzV4clFrdGtrdHlucFhjK1ZnR3p2Rk5RdUJDZ1lXMmdzQUZjeTUKWGdudWZRRmt0bUFhcGh4MkZVemJuUTZMWVdzZWloWXRiRlgwT0NqQkdaZURGRlpBYmp1UEQ1dTdpVXNxczZoYQpoY2JLdG8wYjlrMW01VWk1M1FIN0wzN1U5eDAvOHJIWGF2YnorQ1poRWRpa1VDaFdPMnMwZ0NsUWtNSTY5SGxmCjlxbW5DbW1uS0hjRVZaNytJMFF1Wkp3d0JqY1F6VWQ4L24rclJRalk0djQzUkhRcEYwd3RxMGsyaVd0aWpidHEKajFIWGdxaW82RjlzV1U1MXBtcldVbVEvQUh5MjM1VHczRXAwcWVFNmFVVjFTM2pJcXlyTW1sbVBZWHZuaWVDNApoZ3lLRC9va1gzMmVUMjhDc0ZzMnl3PT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLQo="
+    x-google-marketplace:
+      type: MASKED_FIELD
+
+  # Service Account
+  tfeServiceAccount:
+    type: string
+    x-google-marketplace:
+      type: SERVICE_ACCOUNT
+      serviceAccount:
+        description: "TFE service account for GCS access"
+        roles:
+        - type: Role
+          rulesType: CUSTOM
+          rules:
+          - apiGroups: ['']
+            resources: ['secrets', 'configmaps']
+            verbs: ['get', 'list', 'watch', 'create', 'update', 'delete']
+        - type: Role
+          rulesType: CUSTOM
+          rules:
+          - apiGroups: ['sql.cnrm.cloud.google.com']
+            resources: ['sqlinstances', 'sqldatabases', 'sqlusers']
+            verbs: ['get', 'list', 'watch']
+        - type: Role
+          rulesType: CUSTOM
+          rules:
+          - apiGroups: ['redis.cnrm.cloud.google.com']
+            resources: ['redisinstances']
+            verbs: ['get', 'list', 'watch']
+        - type: Role
+          rulesType: CUSTOM
+          rules:
+          - apiGroups: ['storage.cnrm.cloud.google.com']
+            resources: ['storagebuckets', 'storagebucketaccesscontrols']
+            verbs: ['get', 'list', 'watch']
+
+  # Billing
+  reportingSecret:
+    type: string
+    x-google-marketplace:
+      type: REPORTING_SECRET
+
+required:
+  - name
+  - namespace
+  - configConnector.projectId
+  - reportingSecret

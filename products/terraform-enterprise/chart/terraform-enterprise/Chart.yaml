@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MPL-2.0
 
 apiVersion: v2
-name: terraform-enterprise-chart
+name: terraform-enterprise
 kubeVersion: ">=1.25.0-0"
 description: HashiCorp Terraform Enterprise for GCP Marketplace
 type: application

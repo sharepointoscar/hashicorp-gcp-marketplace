@@ -410,6 +410,16 @@ pdb:
   annotations: {}
   labels: {}
 
+# GCP Marketplace Usage-Based Billing (UBB) Agent
+# This sidecar reports usage metrics to GCP Marketplace
+ubbagent:
+  enabled: false
+  image: ""  # Set by deployer, e.g., gcr.io/PROJECT/terraform-enterprise/ubbagent:TAG
+  reportingServiceName: ""  # Set by deployer, e.g., terraform-enterprise.endpoints.PROJECT.cloud.goog
+
+# GCP Marketplace reporting secret (for UBB)
+reportingSecret: ""
+
 # CSI driver settings for Vault provider
 csi:
   enabled: false
@@ -437,3 +447,93 @@ csi:
     secretName: ""
     # Type of the Kubernetes secret. Example: Opaque
     type: ""
+
+# =============================================================================
+# GCP Marketplace Schema Properties
+# These map to the GCP Marketplace schema.yaml for deployer_helm integration
+# The templates use these values to configure TFE
+# =============================================================================
+
+# TFE main image (set by deployer from schema)
+tfeImage: ""
+
+# UBB agent image (set by deployer from schema)
+ubbagentImage: ""
+
+# Infrastructure (pre-provisioned via Terraform)
+databaseHost: ""
+databaseName: "tfe"
+databaseUser: "tfe"
+databasePassword: ""
+redisHost: ""
+redisPassword: ""
+objectStorageBucket: ""
+objectStorageProject: ""
+
+# TFE Configuration
+hostname: ""
+tfeLicense: ""
+encryptionPassword: ""
+
+# TLS Certificates (base64-encoded)
+tlsCertificate: ""
+tlsPrivateKey: ""
+tlsCACertificate: ""
+
+# Service account name (created by deployer)
+tfeServiceAccount: ""
+
+# =============================================================================
+# GCP Config Connector - Infrastructure Provisioning
+# When enabled, provisions Cloud SQL, Redis, and GCS as part of Helm deployment
+# Requires Config Connector to be installed in the GKE cluster
+# =============================================================================
+
+configConnector:
+  # Enable Config Connector infrastructure provisioning
+  enabled: false
+
+  # GCP Project ID (required when enabled)
+  projectId: ""
+
+  # Google Service Account for Config Connector (required when enabled)
+  # This GSA must have:
+  # - roles/cloudsql.admin
+  # - roles/redis.admin
+  # - roles/storage.admin
+  # - roles/monitoring.metricWriter
+  # Example: tfe-config-connector@my-project.iam.gserviceaccount.com
+  googleServiceAccount: ""
+
+  # VPC Network name for private connectivity
+  networkName: "default"
+
+  # Cloud SQL PostgreSQL configuration
+  sql:
+    databaseVersion: "POSTGRES_16"
+    region: "us-central1"
+    tier: "db-custom-4-16384"
+    availabilityType: "ZONAL"  # ZONAL or REGIONAL
+    diskSize: 50  # GB
+    diskType: "PD_SSD"
+
+  # Memorystore Redis configuration
+  redis:
+    region: "us-central1"
+    tier: "BASIC"  # BASIC or STANDARD_HA
+    memorySizeGb: 4
+    version: "REDIS_7_0"
+    maintenanceWindow:
+      day: "SUNDAY"
+      hour: 2
+
+  # GCS bucket configuration
+  gcs:
+    location: "US"
+    storageClass: "STANDARD"
+    enableIAM: true
+    lifecycleRules: []
+    # - action:
+    #     type: Delete
+    #   condition:
+    #     age: 365

@@ -1,227 +1,406 @@
 # Terraform Enterprise - GCP Marketplace
 
-HashiCorp Terraform Enterprise for GCP Marketplace using the **Terraform K8s App** model with external managed services (Cloud SQL, Memorystore Redis, GCS).
+HashiCorp Terraform Enterprise for GCP Marketplace using the **Kubernetes App (mpdev)** model with external managed services (Cloud SQL, Memorystore Redis, GCS).
 
----
+## Architecture
+
+TFE supports two infrastructure provisioning modes:
+
+### Option A: Config Connector (Auto-Provisioning) - Recommended
+
+Uses GCP Config Connector to automatically provision infrastructure as part of the Helm deployment. Infrastructure is created declaratively via Kubernetes CRDs.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  GCP Marketplace Deployer                                       │
+│  └── Helm Chart with Config Connector CRDs                      │
+│      ├── ConfigConnectorContext (namespace config)              │
+│      ├── SQLInstance (Cloud SQL PostgreSQL)                     │
+│      ├── SQLDatabase + SQLUser                                  │
+│      ├── RedisInstance (Memorystore Redis)                      │
+│      ├── StorageBucket (GCS)                                    │
+│      └── TFE Deployment (waits for infrastructure)              │
+├─────────────────────────────────────────────────────────────────┤
+│  Flow:                                                          │
+│  1. Helm renders Config Connector resources                     │
+│  2. CC operator provisions GCP infrastructure (10-15 min)       │
+│  3. InitContainer waits for resources to be Ready               │
+│  4. InitContainer creates ConfigMap/Secret with endpoints       │
+│  5. TFE container starts with infrastructure config             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Option B: Pre-Provisioned Infrastructure (Terraform)
+
+Infrastructure is provisioned separately using Terraform before deploying TFE.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Phase 1: Infrastructure (Terraform)                            │
+│  └── terraform/ directory                                       │
+│      ├── Cloud SQL PostgreSQL                                   │
+│      ├── Memorystore Redis                                      │
+│      └── GCS Bucket                                             │
+├─────────────────────────────────────────────────────────────────┤
+│  Phase 2: Application (mpdev deployer)                          │
+│  └── Helm chart via deployer_helm                               │
+│      ├── TFE Deployment                                         │
+│      ├── UBB Agent Sidecar                                      │
+│      └── Services, ConfigMaps, Secrets                          │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## Prerequisites
 
-Before running the workflow, ensure you have:
+### Common Prerequisites
 
-1. **GCP Project**: `ibm-software-mp-project-test`
-2. **GKE Cluster**: `vault-mp-test` in `us-central1`
-3. **Artifact Registry**: Create if not exists:
+1. **GCP Project** with billing enabled
+2. **GKE Cluster** (1.33+ recommended)
+3. **Docker authenticated** to GCR:
    ```bash
-   gcloud artifacts repositories create tfe-marketplace \
-     --repository-format=docker \
-     --location=us \
-     --project=ibm-software-mp-project-test
+   gcloud auth configure-docker
    ```
-4. **GCS Bucket**: Create if not exists (with versioning required by Marketplace):
-   ```bash
-   gsutil mb -p ibm-software-mp-project-test gs://ibm-software-mp-project-test-tf-modules
-   gsutil versioning set on gs://ibm-software-mp-project-test-tf-modules
-   ```
-5. **Docker authenticated** to GCP:
-   ```bash
-   gcloud auth configure-docker us-docker.pkg.dev
-   ```
-6. **HashiCorp registry authenticated** (for building TFE image):
+4. **HashiCorp registry authenticated** (for building TFE image):
    ```bash
    export TFE_LICENSE=$(cat "terraform exp Mar 31 2026.hclic")
    make registry/login
    ```
+5. **mpdev installed** (for verification):
+   ```bash
+   gcloud components install kubectl
+   docker pull gcr.io/cloud-marketplace-tools/k8s/dev
+   ```
 
----
+### Config Connector Prerequisites (Option A)
 
-## Complete Workflow
+When using Config Connector for auto-provisioning:
 
-### Step 1: Build and Push All Artifacts
+1. **GKE Cluster with Config Connector addon enabled**:
+   ```bash
+   gcloud container clusters update CLUSTER_NAME \
+     --update-addons ConfigConnector=ENABLED \
+     --region REGION
+   ```
+
+2. **Google Service Account (GSA) for Config Connector**:
+   ```bash
+   PROJECT_ID=your-project-id
+   GSA_NAME=tfe-config-connector
+
+   # Create GSA
+   gcloud iam service-accounts create $GSA_NAME \
+     --project=$PROJECT_ID \
+     --display-name="TFE Config Connector GSA"
+
+   # Grant permissions for Cloud SQL, Redis, GCS
+   for role in cloudsql.admin redis.admin storage.admin monitoring.metricWriter; do
+     gcloud projects add-iam-policy-binding $PROJECT_ID \
+       --member="serviceAccount:$GSA_NAME@$PROJECT_ID.iam.gserviceaccount.com" \
+       --role="roles/$role"
+   done
+   ```
+
+3. **Private Service Access** configured for VPC (required for private Cloud SQL/Redis):
+   ```bash
+   # Reserve IP range for private services
+   gcloud compute addresses create google-managed-services-default \
+     --global --purpose=VPC_PEERING --prefix-length=16 \
+     --network=default --project=$PROJECT_ID
+
+   # Create private connection
+   gcloud services vpc-peerings connect \
+     --service=servicenetworking.googleapis.com \
+     --ranges=google-managed-services-default \
+     --network=default --project=$PROJECT_ID
+   ```
+
+## Quick Start
+
+### Option A: Config Connector (Auto-Provisioning)
 
 ```bash
 cd products/terraform-enterprise
 
-# Build images, push Helm chart, upload TF module
-./scripts/release.sh --build
+# 1. Build all images
+REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 make app/build
+
+# 2. Run validation (uses shared script)
+REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 \
+  ../../shared/scripts/validate-marketplace.sh terraform-enterprise
+
+# 3. Cleanup stuck namespaces (if needed)
+../../shared/scripts/validate-marketplace.sh terraform-enterprise --cleanup
 ```
 
-This will:
-- Build and push TFE + UBB images to Artifact Registry
-- Package and push Helm chart to Artifact Registry
-- Add minor version tags (e.g., `1.1` from `1.1.3`)
-- Package and upload Terraform module ZIP to GCS
-
-### Step 2: Simulate Portal Validation
-
-GCP Marketplace validates by running `terraform plan`. Simulate locally:
+### Option B: Pre-Provisioned Infrastructure (Terraform)
 
 ```bash
+# 1. Provision infrastructure first
+cd products/terraform-enterprise/terraform
 terraform init
+terraform apply -var="project_id=YOUR_PROJECT_ID"
 
-terraform plan -var-file=marketplace_test.tfvars \
-  -var="project_id=ibm-software-mp-project-test" \
-  -var="tfe_image_repo=us-docker.pkg.dev/ibm-software-mp-project-test/tfe-marketplace/tfe" \
-  -var="tfe_image_tag=1.1.3" \
-  -var="ubbagent_image_repo=us-docker.pkg.dev/ibm-software-mp-project-test/tfe-marketplace/ubbagent" \
-  -var="ubbagent_image_tag=1.1.3"
+# Get values for Marketplace form
+terraform output marketplace_inputs
+
+# 2. Build images
+cd products/terraform-enterprise
+REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 make app/build
+
+# 3. Run validation
+REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 make app/verify
 ```
-
-> **Note:** The image variables are normally set by the Marketplace portal via `schema.yaml`. For local simulation, we pass them explicitly.
-
-If this succeeds, the portal's "Save and validate" will also succeed.
-
-### Step 3: Deploy to GKE Cluster (Optional)
-
-To actually deploy TFE to the cluster:
-
-```bash
-./scripts/release.sh --deploy
-```
-
-This runs `terraform apply` with the test values.
-
-### Step 4: Get Portal Configuration Info
-
-```bash
-./scripts/release.sh --info
-```
-
-This displays all values needed for the Producer Portal.
-
----
-
-## Release Script Options
-
-```bash
-./scripts/release.sh [OPTIONS]
-
-Options:
-  --clean    Delete all artifacts from AR and GCS
-  --build    Build and push all artifacts
-  --deploy   Deploy to GKE cluster (terraform apply)
-  --info     Display Partner Portal configuration
-  --all      Clean, build, deploy, and display info
-  --help     Show help
-
-Default (no flags): --build --info
-```
-
-### Common Workflows
-
-```bash
-# Full release (build + show portal info)
-./scripts/release.sh
-
-# Clean slate rebuild
-./scripts/release.sh --all
-
-# Just show what to paste in portal
-./scripts/release.sh --info
-
-# Deploy after making changes
-./scripts/release.sh --build --deploy
-```
-
----
 
 ## Directory Structure
 
 ```
 products/terraform-enterprise/
-├── main.tf                      # Providers, API enablement
-├── gke.tf                       # GKE cluster data source
-├── helm.tf                      # Helm release for TFE
-├── variables.tf                 # Input variables
-├── outputs.tf                   # Deployment outputs
-├── versions.tf                  # Terraform/provider versions (>= 1.3)
-├── schema.yaml                  # Image URI mapping for Marketplace
-├── marketplace_test.tfvars      # Test values for portal validation
-├── Makefile                     # Build targets
-├── scripts/
-│   └── release.sh               # Main release/deploy script
-├── helm/                        # Helm chart (pushed to AR)
+├── Makefile                     # Build targets for mpdev model
+├── schema.yaml                  # GCP Marketplace schema (user inputs)
+├── chart/
+│   └── terraform-enterprise/    # Helm chart for TFE
+│       ├── Chart.yaml
+│       ├── values.yaml
+│       └── templates/
+│           ├── deployment.yaml           # TFE Deployment with initContainer
+│           ├── config-connector-sql.yaml # Cloud SQL (when CC enabled)
+│           ├── config-connector-redis.yaml # Redis (when CC enabled)
+│           ├── config-connector-gcs.yaml # GCS bucket (when CC enabled)
+│           ├── config-connector-context.yaml # CC namespace config
+│           └── rbac.yaml                 # RBAC for CC resources
+├── deployer/
+│   └── Dockerfile               # Deployer image (deployer_helm base)
+├── apptest/
+│   ├── deployer/
+│   │   └── schema.yaml          # Test schema with defaults
+│   └── tester/
+│       ├── Dockerfile
+│       ├── tester.sh
+│       └── tests/
 ├── images/
 │   ├── tfe/Dockerfile           # TFE container image
 │   └── ubbagent/Dockerfile      # Usage-based billing agent
-├── modules/infrastructure/      # Cloud SQL, Redis, GCS resources
-└── test-certs/                  # Self-signed TLS certs for testing
+└── terraform/                   # Infrastructure provisioning (Option B)
+    ├── main.tf
+    ├── variables.tf
+    ├── outputs.tf
+    └── modules/infrastructure/
 ```
-
----
 
 ## Makefile Targets
 
 ```bash
-make images/build      # Build container images
-make helm/push         # Package and push Helm chart
-make terraform/upload  # Package and upload TF module
-make terraform/plan    # Run terraform plan
-make ar/clean          # Delete images from Artifact Registry
+make app/build         # Build all images (tfe, ubbagent, deployer, tester)
+make app/verify        # Run mpdev verify
+make app/install       # Run mpdev install
+make helm/lint         # Lint Helm chart
+make gcr/tag-versions  # Add major/minor version tags
+make gcr/clean         # Delete images from GCR
 make clean             # Clean local build artifacts
 make info              # Display version and artifact info
+make registry/login    # Login to HashiCorp registry
+make release           # Clean, build, and tag all versions
 ```
 
----
+## Shared Validation Script
 
-## GCP Producer Portal Configuration
+```bash
+# Full validation pipeline (build + verify)
+REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 \
+  ../../shared/scripts/validate-marketplace.sh terraform-enterprise
 
-After running `./scripts/release.sh --info`, use these values:
+# Cleanup stuck namespaces (handles Config Connector resources)
+../../shared/scripts/validate-marketplace.sh terraform-enterprise --cleanup
 
-### Deployment Configuration Tab
+# Clean GCR images before building
+REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 \
+  ../../shared/scripts/validate-marketplace.sh terraform-enterprise --gcr-clean
+```
 
-| Field | Value |
-|-------|-------|
-| **Helm Chart URL** | `us-docker.pkg.dev/ibm-software-mp-project-test/tfe-marketplace/terraform-enterprise-chart` |
-| **Display tag** | `1.1` |
-| **Module location** | `gs://ibm-software-mp-project-test-tf-modules/terraform-enterprise/1.1.3/terraform-enterprise-1.1.3.zip` |
+## Images Built
 
-### Required IAM Roles
+| Image | Description |
+|-------|-------------|
+| `$REGISTRY/terraform-enterprise:$TAG` | Main TFE application |
+| `$REGISTRY/terraform-enterprise/ubbagent:$TAG` | Usage-based billing agent |
+| `$REGISTRY/terraform-enterprise/deployer:$TAG` | mpdev deployer (Helm-based) |
+| `$REGISTRY/terraform-enterprise/tester:$TAG` | mpdev tester for verification |
 
-| Role | Purpose |
-|------|---------|
-| `roles/container.developer` | Deploy to GKE cluster |
-| `roles/cloudsql.admin` | Create Cloud SQL instance |
-| `roles/redis.admin` | Create Memorystore Redis |
-| `roles/storage.admin` | Create GCS bucket |
-| `roles/iam.serviceAccountAdmin` | Create service accounts |
-| `roles/iam.serviceAccountUser` | Use service accounts |
-| `roles/iam.workloadIdentityUser` | Configure Workload Identity |
-| `roles/servicenetworking.networksAdmin` | Configure Private Service Access |
-| `roles/compute.networkAdmin` | Manage VPC peering |
-| `roles/serviceusage.serviceUsageAdmin` | Enable required APIs |
+## Config Connector Integration
 
----
+When `configConnector.enabled=true`, the Helm chart provisions infrastructure automatically using GCP Config Connector CRDs:
+
+| Resource | CRD | Description |
+|----------|-----|-------------|
+| Cloud SQL | `SQLInstance`, `SQLDatabase`, `SQLUser` | PostgreSQL 16, private IP, auto-resize |
+| Redis | `RedisInstance` | Memorystore Redis 7, AUTH enabled |
+| GCS | `StorageBucket` | Object storage for TFE |
+
+**InitContainer Flow:**
+1. Sets up Workload Identity binding for Config Connector
+2. Waits for SQLInstance, RedisInstance, StorageBucket to be Ready (10-15 min)
+3. Retrieves infrastructure endpoints (IPs, auth strings)
+4. Creates ConfigMap/Secret with TFE environment variables
+5. TFE container starts with infrastructure configuration
+
+**Config Connector Values:**
+```yaml
+configConnector:
+  enabled: true
+  projectId: "your-project-id"
+  googleServiceAccount: "tfe-config-connector@project.iam.gserviceaccount.com"
+  networkName: "default"
+  sql:
+    region: "us-central1"
+    tier: "db-custom-4-16384"
+    diskSize: 50
+  redis:
+    region: "us-central1"
+    tier: "STANDARD_HA"
+    memorySizeGb: 4
+```
+
+## Schema Properties
+
+User inputs defined in `schema.yaml`:
+
+### Core Settings
+| Property | Description |
+|----------|-------------|
+| `name` | Application instance name |
+| `namespace` | Kubernetes namespace |
+| `hostname` | TFE FQDN |
+| `license` | TFE license (base64) |
+| `encryptionPassword` | Encryption password (16+ chars) |
+
+### TLS Configuration
+| Property | Description |
+|----------|-------------|
+| `tlsCertificate` | TLS cert (base64) |
+| `tlsPrivateKey` | TLS key (base64) |
+| `tlsCACertificate` | CA cert (base64) |
+
+### Config Connector (Option A)
+| Property | Description |
+|----------|-------------|
+| `configConnector.enabled` | Enable auto-provisioning (default: true) |
+| `configConnector.projectId` | GCP project ID |
+| `configConnector.googleServiceAccount` | GSA for Config Connector |
+
+### Pre-provisioned Infrastructure (Option B)
+| Property | Description |
+|----------|-------------|
+| `databaseHost` | Cloud SQL PostgreSQL private IP |
+| `databaseName` | Database name (default: tfe) |
+| `databaseUser` | Database user (default: tfe) |
+| `databasePassword` | Database password |
+| `redisHost` | Memorystore Redis private IP |
+| `redisPassword` | Redis AUTH string |
+| `objectStorageBucket` | GCS bucket name |
+| `objectStorageProject` | GCP project ID |
+
+### Service Account
+| Property | Description |
+|----------|-------------|
+| `serviceAccount` | K8s service account |
+| `reportingSecret` | GCP Marketplace reporting secret |
 
 ## Troubleshooting
 
-### Portal Error: "Failed to execute terraform plan"
+### mpdev verify fails with timeout
 
-**Cause**: Terraform version constraint incompatible with Infrastructure Manager.
+TFE requires >600 seconds to fully start. The deployer sets `WAIT_FOR_READY_TIMEOUT=1800`.
 
-**Fix**: Ensure `versions.tf` has `required_version = ">= 1.3"`. Infrastructure Manager supports 1.5.7, 1.4.7, and 1.3.10.
+Check pod status:
+```bash
+kubectl get pods -n <namespace>
+kubectl logs -n <namespace> <pod> -c terraform-enterprise
+```
 
-### Health Check
+### Health check endpoint
 
 ```bash
-kubectl get svc -n terraform-enterprise
+kubectl get svc -n <namespace>
 curl -k https://<LB_IP>/_health_check
 # Expected: {"postgres":"UP","redis":"UP","vault":"UP"}
 ```
 
-### Check Pod Status
+### Vault manager crash loop
 
+This usually indicates stale encryption data. Clean vault tables:
 ```bash
-kubectl get pods -n terraform-enterprise
-kubectl logs -n terraform-enterprise <pod-name> -c terraform-enterprise
+# Flush Redis
+kubectl run redis-flush --rm -it --restart=Never --image=redis:7 -- \
+  redis-cli -h <REDIS_IP> -a "<password>" FLUSHALL
+
+# Truncate vault tables
+kubectl run psql-cleanup --rm -i --restart=Never --image=postgres:15 -- \
+  psql "postgresql://tfe:<password>@<DB_IP>:5432/tfe?sslmode=require" <<EOF
+TRUNCATE vault.vault_kv_store CASCADE;
+TRUNCATE vault.vault_ha_locks CASCADE;
+EOF
 ```
 
-### Verify Image Annotations
+### Clean up test namespaces
 
 ```bash
-docker manifest inspect us-docker.pkg.dev/ibm-software-mp-project-test/tfe-marketplace/tfe:1.1.3 | jq '.annotations'
+# Use the shared script to clean up Config Connector resources and namespaces
+../../shared/scripts/validate-marketplace.sh terraform-enterprise --cleanup
+
+# Or manually
+kubectl delete ns apptest-*
+```
+
+### Config Connector resources stuck in "Unmanaged" status
+
+This indicates the Config Connector controller isn't managing the namespace:
+
+```bash
+# Check ConfigConnectorContext
+kubectl get configconnectorcontext -n <namespace>
+
+# Check if controller is running
+kubectl get pods -n cnrm-system -l cnrm.cloud.google.com/scoped-namespace=<namespace>
+
+# Verify GSA has correct permissions
+gcloud iam service-accounts get-iam-policy \
+  tfe-config-connector@$PROJECT_ID.iam.gserviceaccount.com
+```
+
+### Config Connector resources failing with 403
+
+The GSA lacks permissions. Grant required roles:
+
+```bash
+for role in cloudsql.admin redis.admin storage.admin; do
+  gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member="serviceAccount:tfe-config-connector@$PROJECT_ID.iam.gserviceaccount.com" \
+    --role="roles/$role"
+done
+```
+
+### Verify image annotations
+
+```bash
+docker manifest inspect gcr.io/$PROJECT_ID/terraform-enterprise:1.1.3 | jq '.annotations'
 ```
 
 All images must have:
 ```
-com.googleapis.cloudmarketplace.product.service.name=services/tfe-self-managed.endpoints.ibm-software-mp-project-test.cloud.goog
+com.googleapis.cloudmarketplace.product.service.name=services/tfe-self-managed.endpoints.PROJECT_ID.cloud.goog
 ```
+
+## Version Synchronization
+
+These files must have matching versions:
+1. `schema.yaml` → `publishedVersion: '1.1.3'`
+2. `apptest/deployer/schema.yaml` → `publishedVersion: '1.1.3'`
+3. `Makefile` → `VERSION ?= 1.1.3`
+
+## GCP Marketplace Requirements
+
+Images must be:
+- Single architecture: `linux/amd64`
+- Docker V2 manifests: `--provenance=false --sbom=false`
+- Annotated with `com.googleapis.cloudmarketplace.product.service.name`
+- Tagged with semantic versions (e.g., `1.1.3` and `1.1`)

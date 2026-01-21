@@ -1,0 +1,36 @@
+{{/*
+Config Connector - Memorystore Redis Instance
+Provisions Redis infrastructure as part of the Helm deployment
+*/}}
+{{- if .Values.configConnector.enabled }}
+---
+# Memorystore Redis Instance
+apiVersion: redis.cnrm.cloud.google.com/v1beta1
+kind: RedisInstance
+metadata:
+  name: {{ .Release.Name }}-redis
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    cnrm.cloud.google.com/project-id: {{ .Values.configConnector.projectId | quote }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}
+    app.kubernetes.io/component: cache
+spec:
+  displayName: "TFE Redis - {{ .Release.Name }}"
+  region: {{ .Values.configConnector.redis.region | default "us-central1" }}
+  tier: {{ .Values.configConnector.redis.tier | default "BASIC" }}
+  memorySizeGb: {{ .Values.configConnector.redis.memorySizeGb | default 4 }}
+  redisVersion: {{ .Values.configConnector.redis.version | default "REDIS_7_0" }}
+  authEnabled: true
+  connectMode: PRIVATE_SERVICE_ACCESS
+  authorizedNetworkRef:
+    external: projects/{{ .Values.configConnector.projectId }}/global/networks/{{ .Values.configConnector.networkName | default "default" }}
+  {{- if .Values.configConnector.redis.maintenanceWindow }}
+  maintenancePolicy:
+    weeklyMaintenanceWindow:
+      - day: {{ .Values.configConnector.redis.maintenanceWindow.day | default "SUNDAY" }}
+        startTime:
+          hours: {{ .Values.configConnector.redis.maintenanceWindow.hour | default 2 }}
+          minutes: 0
+  {{- end }}
+{{- end }}

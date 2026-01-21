@@ -107,51 +107,6 @@ variable "ca_certificate" {
   sensitive   = true
 }
 
-# -----------------------------------------------------------------------------
-# Helm Chart Configuration (set by GCP Marketplace)
-# -----------------------------------------------------------------------------
-
-variable "helm_chart_repo" {
-  description = "Helm chart repository URL (OCI)"
-  type        = string
-  default     = "oci://us-docker.pkg.dev/ibm-software-mp-project-test/tfe-marketplace"
-}
-
-variable "helm_chart_name" {
-  description = "Helm chart name"
-  type        = string
-  default     = "terraform-enterprise-chart"
-}
-
-variable "helm_chart_version" {
-  description = "Helm chart version"
-  type        = string
-  default     = "1.1.3"
-}
-
-# -----------------------------------------------------------------------------
-# Image Configuration (set by GCP Marketplace via schema.yaml)
-# -----------------------------------------------------------------------------
-
-variable "tfe_image_repo" {
-  description = "TFE image repository (set by GCP Marketplace)"
-  type        = string
-}
-
-variable "tfe_image_tag" {
-  description = "TFE image tag (set by GCP Marketplace)"
-  type        = string
-}
-
-variable "ubbagent_image_repo" {
-  description = "UBB agent image repository (set by GCP Marketplace)"
-  type        = string
-}
-
-variable "ubbagent_image_tag" {
-  description = "UBB agent image tag (set by GCP Marketplace)"
-  type        = string
-}
 
 # -----------------------------------------------------------------------------
 # Infrastructure Configuration

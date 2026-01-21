@@ -1,0 +1,50 @@
+{{/*
+GCP Marketplace Usage-Based Billing (UBB) Agent ConfigMap
+This configures the UBB agent sidecar for usage reporting.
+*/}}
+{{- if .Values.ubbagent.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-ubbagent-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: terraform-enterprise
+    component: ubbagent
+data:
+  config.yaml: |
+    # GCP Marketplace UBB Agent Configuration
+    # Reports TFE instance usage metrics to GCP Marketplace
+
+    identities:
+    - name: gcp
+      gcp:
+        encodedServiceAccountKey: $AGENT_ENCODED_KEY
+
+    metrics:
+    - name: tfe_instance_time
+      type: int
+      endpoints:
+      - name: servicecontrol
+      passthrough: {}
+    - name: tfe_instance_count
+      type: int
+      endpoints:
+      - name: servicecontrol
+      passthrough: {}
+
+    endpoints:
+    - name: servicecontrol
+      servicecontrol:
+        identity: gcp
+        serviceName: {{ .Values.ubbagent.reportingServiceName }}
+        consumerId: $AGENT_CONSUMER_ID
+
+    sources:
+    - name: instance_time_heartbeat
+      heartbeat:
+        metric: tfe_instance_time
+        intervalSeconds: 3600
+        value:
+          int64Value: 1
+{{- end }}

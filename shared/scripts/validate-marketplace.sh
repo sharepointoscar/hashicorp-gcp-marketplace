@@ -63,6 +63,22 @@ cleanup_all_resources() {
     echo "Cleaning up all test resources..."
     echo "=================================================="
 
+    # Get all test namespaces (both apptest and product-specific)
+    ALL_TEST_NS=$(kubectl get ns -o name 2>/dev/null | grep -E "apptest-|vault-|consul-|nomad-|terraform-enterprise-|boundary-" | cut -d'/' -f2)
+
+    if [ -n "$ALL_TEST_NS" ]; then
+        # First pass: Delete Config Connector resources in each namespace
+        echo "Deleting Config Connector resources..."
+        for ns in $ALL_TEST_NS; do
+            # Check if Config Connector resources exist
+            if kubectl get sqlinstance -n "$ns" &>/dev/null 2>&1; then
+                echo "  Deleting CC resources in $ns..."
+                kubectl delete storagebucket,redisinstance,sqluser,sqldatabase,sqlinstance --all -n "$ns" --wait=false 2>/dev/null || true
+                kubectl delete configconnectorcontext --all -n "$ns" --wait=false 2>/dev/null || true
+            fi
+        done
+    fi
+
     # Delete all apptest namespaces
     echo "Deleting apptest-* namespaces..."
     for ns in $(kubectl get ns -o name 2>/dev/null | grep "apptest-" | cut -d'/' -f2); do
@@ -81,9 +97,19 @@ cleanup_all_resources() {
     echo "Waiting for namespaces to terminate..."
     sleep 5
 
-    # Force delete stuck namespaces
+    # Force delete stuck namespaces by removing finalizers
+    echo "Force deleting stuck namespaces..."
     for ns in $(kubectl get ns 2>/dev/null | grep -E "apptest-|vault-|consul-|nomad-|terraform-enterprise-|boundary-" | grep Terminating | awk '{print $1}'); do
         echo "  Force deleting stuck namespace: $ns"
+
+        # Remove finalizers from ConfigConnectorContext and RoleBindings
+        for resource in configconnectorcontext rolebinding; do
+            for item in $(kubectl get $resource -n "$ns" -o name 2>/dev/null); do
+                kubectl patch "$item" -n "$ns" -p '{"metadata":{"finalizers":[]}}' --type=merge 2>/dev/null || true
+            done
+        done
+
+        # Remove namespace finalizers
         kubectl get ns "$ns" -o json 2>/dev/null | jq '.spec.finalizers = []' | \
             kubectl replace --raw "/api/v1/namespaces/$ns/finalize" -f - 2>/dev/null || true
     done
