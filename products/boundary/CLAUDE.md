@@ -37,31 +37,45 @@ gcloud auth login && gcloud auth application-default login
 gcloud secrets create boundary-license --data-file=boundary.hclic
 ```
 
-**Validation:**
+**Standard Validation Workflow (USE THIS):**
 ```bash
-# Validate Terraform configuration
-terraform init
-terraform validate
+# Run all validations (terraform + CFT metadata)
+make validate
 
-# Validate Marketplace metadata (requires CFT CLI)
-cft blueprint metadata -p . -v
-
-# Test deployment plan
-terraform plan -var project_id=$PROJECT_ID \
-  -var boundary_fqdn="boundary.example.com" \
-  -var boundary_license_secret="projects/$PROJECT_ID/secrets/boundary-license/versions/latest"
+# Run full validation including terraform plan
+make validate/full
 ```
+
+**Full Release (validate + package + upload):**
+```bash
+make release
+```
+
+**Individual Targets:**
+```bash
+make terraform/validate  # Validate Terraform configuration
+make cft/validate        # Validate CFT metadata (requires CFT CLI)
+make terraform/plan      # Run terraform plan with marketplace_test.tfvars
+make package             # Create ZIP package
+make upload              # Upload package to GCS
+```
+
+**CRITICAL WARNINGS:**
+- **NEVER run `make clean` if you have existing terraform state** - it deletes `*.tfstate*` files!
+- **NEVER run `make gcs/clean`** unless you want to remove the GCS package
+- To clean only build artifacts without deleting state: `rm -rf .build`
 
 **Full Deployment Test:**
 ```bash
-# Apply
-terraform apply
+# Initialize and apply
+terraform init
+terraform apply -var-file=marketplace_test.tfvars -var="project_id=$PROJECT_ID"
 
 # Verify health
 curl -k https://<BOUNDARY_FQDN>:9200/health
 
 # Cleanup
-terraform destroy
+terraform destroy -var-file=marketplace_test.tfvars -var="project_id=$PROJECT_ID"
 ```
 
 ## File Structure
@@ -183,6 +197,26 @@ SELECT count(*) FROM boundary_schema_version;
 | Worker auth failed | Clock skew or KMS issue | Check NTP sync, verify KMS permissions |
 | DB connection refused | Cloud SQL not ready | Wait for provisioning, check private service access |
 | Health check timeout | Controllers initializing | Wait 5-10 min, check controller logs |
+| `iam.managed.disableServiceAccountKeyCreation` | Org policy blocks SA key creation | Request org policy exception or use workload identity |
+| `proxy-only subnetwork is required` | Missing proxy subnet for internal LB | Create proxy-only subnet in VPC for the region |
+
+## GCP Org Policy Issues
+
+Some GCP organizations have security policies that block certain operations:
+
+**Service Account Key Creation Blocked:**
+```
+Error: Operation denied by org policy: ["constraints/iam.managed.disableServiceAccountKeyCreation"]
+```
+- The module creates SA keys for Boundary to authenticate to GCP services
+- Request an exception for your project, or modify the module to use workload identity
+
+**Proxy-Only Subnet Required:**
+```
+Error: An active proxy-only subnetwork is required in the same region and VPC
+```
+- Internal TCP proxy load balancers require a proxy-only subnet
+- Create one manually: `gcloud compute networks subnets create proxy-subnet --purpose=REGIONAL_MANAGED_PROXY --role=ACTIVE --region=us-central1 --network=default --range=10.129.0.0/23`
 
 ## Security Notes
 
