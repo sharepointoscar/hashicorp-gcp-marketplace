@@ -139,6 +139,26 @@ terraform/plan: terraform/init
 	terraform plan -var-file=marketplace_test.tfvars -var="project_id=$(PROJECT_ID)"
 	$(call print_success,Terraform plan succeeded)
 
+.PHONY: terraform/apply
+terraform/apply: terraform/init
+	$(call print_notice,Applying Terraform configuration...)
+	@if [ ! -f marketplace_test.tfvars ]; then \
+		echo -e "$(RED)[ERROR] marketplace_test.tfvars not found$(NC)"; \
+		exit 1; \
+	fi
+	terraform apply -var-file=marketplace_test.tfvars -var="project_id=$(PROJECT_ID)" -auto-approve
+	$(call print_success,Terraform apply succeeded)
+
+.PHONY: terraform/destroy
+terraform/destroy: terraform/init
+	$(call print_notice,Destroying Terraform resources...)
+	@if [ ! -f marketplace_test.tfvars ]; then \
+		echo -e "$(RED)[ERROR] marketplace_test.tfvars not found$(NC)"; \
+		exit 1; \
+	fi
+	terraform destroy -var-file=marketplace_test.tfvars -var="project_id=$(PROJECT_ID)" -auto-approve
+	$(call print_success,Terraform destroy succeeded)
+
 #=============================================================================
 # PACKAGE & UPLOAD
 #=============================================================================
@@ -305,6 +325,8 @@ help:
 	@echo "  make cft/validate     - Validate metadata with CFT CLI"
 	@echo "  make terraform/validate - Validate Terraform module"
 	@echo "  make terraform/plan   - Run terraform plan with test vars"
+	@echo "  make terraform/apply  - Apply Terraform configuration"
+	@echo "  make terraform/destroy - Destroy Terraform resources"
 	@echo "  make validate         - Run all validations (cft + terraform)"
 	@echo "  make validate/full    - Run all validations including plan"
 	@echo ""

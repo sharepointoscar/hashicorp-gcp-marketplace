@@ -55,6 +55,7 @@ module "controller" {
   project_id           = var.project_id
   region               = var.region
   friendly_name_prefix = local.name_prefix
+  boundary_image       = var.boundary_image
 
   # Boundary configuration
   boundary_fqdn                            = var.boundary_fqdn
@@ -71,6 +72,8 @@ module "controller" {
   vpc_project_id            = var.vpc_project_id
   subnet_name               = var.controller_subnet_name
   api_load_balancing_scheme = var.api_load_balancing_scheme
+  create_proxy_subnet       = var.create_proxy_subnet
+  proxy_subnet_cidr         = var.proxy_subnet_cidr
 
   # DNS
   create_cloud_dns_record = var.create_cloud_dns_record
@@ -108,6 +111,7 @@ module "ingress_worker" {
   project_id           = var.project_id
   region               = var.region
   friendly_name_prefix = "${local.name_prefix}-ing"
+  boundary_image       = var.boundary_image
 
   # Boundary configuration
   boundary_version           = var.boundary_version
@@ -158,6 +162,7 @@ module "egress_worker" {
   project_id           = var.project_id
   region               = var.region
   friendly_name_prefix = "${local.name_prefix}-egr"
+  boundary_image       = var.boundary_image
 
   # Boundary configuration
   boundary_version           = var.boundary_version

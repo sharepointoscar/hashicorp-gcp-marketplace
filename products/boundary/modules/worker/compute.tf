@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: MPL-2.0
 
 data "google_compute_image" "boundary" {
-  name    = var.image_name
-  project = var.image_project
+  # Parse image name and project from full path: projects/PROJECT/global/images/IMAGE
+  name    = element(split("/", var.boundary_image), length(split("/", var.boundary_image)) - 1)
+  project = element(split("/", var.boundary_image), 1)
 }
 
 data "google_compute_zones" "up" {

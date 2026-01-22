@@ -82,6 +82,18 @@ variable "vpc_project_id" {
   default     = null
 }
 
+variable "create_proxy_subnet" {
+  type        = bool
+  description = "Create a proxy-only subnet for the internal load balancer. Required if one doesn't exist in the VPC/region."
+  default     = true
+}
+
+variable "proxy_subnet_cidr" {
+  type        = string
+  description = "CIDR range for the proxy-only subnet. Must not overlap with existing subnets."
+  default     = "192.168.100.0/23"
+}
+
 #------------------------------------------------------------------------------
 # Boundary Configuration
 #------------------------------------------------------------------------------
@@ -264,6 +276,12 @@ variable "common_labels" {
 #------------------------------------------------------------------------------
 # GCP Marketplace
 #------------------------------------------------------------------------------
+
+variable "boundary_image" {
+  type        = string
+  description = "Full path to VM image for Boundary instances."
+  default     = "projects/ibm-software-mp-project-test/global/images/hashicorp-ubuntu2204-boundary-x86-64-v0210-20260117"
+}
 
 variable "goog_cm_deployment_name" {
   type        = string

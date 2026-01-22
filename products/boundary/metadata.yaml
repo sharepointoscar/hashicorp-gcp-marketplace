@@ -88,6 +88,14 @@ spec:
       - name: vpc_project_id
         description: Project ID where the VPC resides (if different from deployment project).
         varType: string
+      - name: create_proxy_subnet
+        description: Create a proxy-only subnet for the internal load balancer. Required if one doesn't exist in the VPC/region.
+        varType: bool
+        defaultValue: true
+      - name: proxy_subnet_cidr
+        description: CIDR range for the proxy-only subnet. Must not overlap with existing subnets.
+        varType: string
+        defaultValue: "192.168.100.0/23"
       # Boundary Config
       - name: boundary_version
         description: Boundary Enterprise version to install.
@@ -183,14 +191,11 @@ spec:
         varType: list(string)
         defaultValue:
           - "10.0.0.0/8"
-      # Labels
-      - name: common_labels
-        description: Common labels to apply to all resources.
-        varType: map(string)
-        defaultValue:
-          managed-by: terraform
-          product: boundary-enterprise
       # Marketplace
+      - name: boundary_image
+        description: Full path to VM image for Boundary instances.
+        varType: string
+        defaultValue: "projects/ibm-software-mp-project-test/global/images/hashicorp-ubuntu2204-boundary-x86-64-v0210-20260117"
       - name: friendly_name_prefix
         description: Friendly name prefix for uniquely naming resources (max 12 chars, no 'boundary').
         varType: string

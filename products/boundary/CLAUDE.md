@@ -124,6 +124,76 @@ When forking HVD modules, these changes are needed:
 2. Verify only approved Terraform providers are used
 3. Update `boundary_version` default to latest (0.21.0+ent)
 
+## Pre-Baked VM Image Architecture (CRITICAL)
+
+**This deployment uses a Packer-built VM image with Boundary pre-installed.** The VMs do NOT have internet access at runtime (no Cloud NAT), so all cloud-init scripts MUST be idempotent and skip installation steps when software is already present.
+
+### Why Pre-Baked Images?
+1. **GCP Marketplace requirement**: Faster deployment, no external downloads during customer provisioning
+2. **Security**: No runtime internet egress needed from VMs
+3. **Reliability**: No dependency on releases.hashicorp.com availability
+
+### Cloud-Init Template Design Principles
+
+The HVD modules were forked from upstream and require modifications for pre-baked images:
+
+**Location of templates:**
+- `modules/controller/templates/boundary_custom_data.sh.tpl`
+- `modules/worker/templates/boundary_custom_data.sh.tpl`
+
+**REQUIRED modifications for pre-baked image compatibility:**
+
+1. **Package installation (`install_prereqs`)** - Check if packages exist before apt-get:
+   ```bash
+   if [[ -z "$MISSING_PACKAGES" ]]; then
+     log "[INFO]" "All required packages already installed (pre-baked image)."
+     return 0
+   fi
+   ```
+
+2. **Binary installation (`install_boundary_binary`)** - Skip download if binary exists:
+   ```bash
+   if [[ -x "$BOUNDARY_DIR_BIN/boundary" ]] || [[ -x "/usr/bin/boundary" ]]; then
+     log "[INFO]" "Boundary binary already installed (pre-baked image)."
+     return 0
+   fi
+   ```
+
+3. **User/group creation (`user_group_create`)** - Ignore "already exists" errors:
+   ```bash
+   sudo groupadd --system $BOUNDARY_GROUP 2>/dev/null || log "[INFO]" "Group already exists"
+   sudo useradd ... 2>/dev/null || log "[INFO]" "User already exists"
+   ```
+
+4. **Checksum verification (`checksum_verify` - worker only)** - Skip if binary already present
+
+### Pre-Baked Image Details
+- **Image Name**: `hashicorp-ubuntu2204-boundary-x86-64-v0210-YYYYMMDD`
+- **Image Family**: `boundary-enterprise`
+- **Project**: `ibm-software-mp-project-test`
+- **Built With**: Packer (`make packer/build`)
+
+The image includes:
+- Boundary Enterprise binary (`/usr/bin/boundary`)
+- `boundary` user and group
+- Required packages: `jq`, `unzip`, `gcloud SDK`
+- Systemd service template
+
+### Testing Cloud-Init Changes
+
+After modifying templates:
+1. Run `terraform apply` to update instance templates
+2. Trigger rolling update: `gcloud compute instance-groups managed rolling-action replace <MIG> --region=<region> --max-unavailable=4`
+3. SSH to VM and check: `cat /var/log/boundary-cloud-init.log`
+
+**Expected log output for pre-baked image:**
+```
+[INFO] - All required packages already installed (pre-baked image).
+[INFO] - Group boundary already exists
+[INFO] - User boundary already exists
+[INFO] - Boundary binary already installed (pre-baked image).
+```
+
 ## Version Synchronization
 
 These files must have matching versions:

@@ -9,6 +9,20 @@ data "google_compute_subnetwork" "subnet" {
 }
 
 #-----------------------------------------------------------------------------------
+# Proxy-Only Subnet (required for INTERNAL_MANAGED load balancer)
+#-----------------------------------------------------------------------------------
+resource "google_compute_subnetwork" "proxy_only" {
+  count = var.create_proxy_subnet ? 1 : 0
+
+  name          = "${var.friendly_name_prefix}-proxy-only-subnet"
+  ip_cidr_range = var.proxy_subnet_cidr
+  region        = var.region
+  network       = var.vpc
+  purpose       = "REGIONAL_MANAGED_PROXY"
+  role          = "ACTIVE"
+}
+
+#-----------------------------------------------------------------------------------
 # API Frontend
 #-----------------------------------------------------------------------------------
 resource "google_compute_address" "api" {
@@ -82,6 +96,8 @@ resource "google_compute_forwarding_rule" "cluster" {
   subnetwork            = data.google_compute_subnetwork.subnet.self_link
   network_tier          = "PREMIUM"
   ip_address            = google_compute_address.cluster.address
+
+  depends_on = [google_compute_subnetwork.proxy_only]
 }
 
 #-----------------------------------------------------------------------------------

@@ -105,8 +105,9 @@ data "google_compute_zones" "up" {
 }
 
 data "google_compute_image" "boundary" {
-  name    = var.image_name
-  project = var.image_project
+  # Parse image name and project from full path: projects/PROJECT/global/images/IMAGE
+  name    = element(split("/", var.boundary_image), length(split("/", var.boundary_image)) - 1)
+  project = element(split("/", var.boundary_image), 1)
 }
 
 resource "google_compute_region_instance_group_manager" "boundary" {

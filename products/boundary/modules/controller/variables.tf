@@ -129,6 +129,18 @@ variable "api_load_balancing_scheme" {
   }
 }
 
+variable "create_proxy_subnet" {
+  type        = bool
+  description = "Boolean to create a proxy-only subnet for the INTERNAL_MANAGED load balancer. Required if one doesn't already exist in the VPC/region."
+  default     = true
+}
+
+variable "proxy_subnet_cidr" {
+  type        = string
+  description = "CIDR range for the proxy-only subnet. Must not overlap with existing subnets."
+  default     = "192.168.100.0/23"
+}
+
 variable "create_cloud_dns_record" {
   type        = bool
   description = "Boolean to create Google Cloud DNS record for `boundary_fqdn` resolving to load balancer IP. `cloud_dns_managed_zone` is required when `true`."
@@ -262,16 +274,10 @@ variable "bsr_key_name" {
 #-----------------------------------------------------------------------------------
 # Compute
 #-----------------------------------------------------------------------------------
-variable "image_project" {
+variable "boundary_image" {
   type        = string
-  description = "ID of project in which the resource belongs."
-  default     = "ubuntu-os-cloud"
-}
-
-variable "image_name" {
-  type        = string
-  description = "VM image for Boundary instance(s)."
-  default     = "ubuntu-2404-noble-amd64-v20240607"
+  description = "Full path to VM image for Boundary instances (projects/PROJECT/global/images/IMAGE)."
+  default     = "projects/ibm-software-mp-project-test/global/images/hashicorp-ubuntu2204-boundary-x86-64-v0210-20260117"
 }
 
 variable "machine_type" {

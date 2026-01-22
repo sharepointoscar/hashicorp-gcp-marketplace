@@ -158,16 +158,10 @@ variable "key_name" {
 #-----------------------------------------------------------------------------------
 # Compute
 #-----------------------------------------------------------------------------------
-variable "image_project" {
+variable "boundary_image" {
   type        = string
-  description = "ID of project in which the resource belongs."
-  default     = "ubuntu-os-cloud"
-}
-
-variable "image_name" {
-  type        = string
-  description = "VM image for Boundary instance(s)."
-  default     = "ubuntu-2404-noble-amd64-v20240607"
+  description = "Full path to VM image for Boundary instances (projects/PROJECT/global/images/IMAGE)."
+  default     = "projects/ibm-software-mp-project-test/global/images/hashicorp-ubuntu2204-boundary-x86-64-v0210-20260117"
 }
 
 variable "machine_type" {

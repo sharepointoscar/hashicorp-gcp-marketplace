@@ -12,10 +12,8 @@ resource "google_service_account" "boundary" {
   description  = "Service Account allowing Boundary instance(s) to interact GCP resources and services."
 }
 
-resource "google_service_account_key" "boundary" {
-  service_account_id = google_service_account.boundary.name
-}
-
+# NOTE: google_service_account_key removed - VMs use attached SA via metadata server
+# This avoids org policy: iam.managed.disableServiceAccountKeyCreation
 
 #------------------------------------------------------------------------------
 # Cloud SQL for PostgreSQL KMS CMEK
@@ -217,11 +215,7 @@ resource "google_service_account" "bsr" {
   description  = "Service Account allowing Boundary workers(s) to interact Google Cloud Storage bucket for session recording."
 }
 
-resource "google_service_account_key" "bsr" {
-  count = var.enable_session_recording ? 1 : 0
-
-  service_account_id = google_service_account.bsr[0].name
-}
+# NOTE: google_service_account_key.bsr removed - not used, avoids org policy
 
 resource "google_storage_hmac_key" "bsr" {
   count = var.enable_session_recording ? 1 : 0

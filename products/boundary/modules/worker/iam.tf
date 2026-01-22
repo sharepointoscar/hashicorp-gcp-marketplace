@@ -24,9 +24,8 @@ resource "google_service_account" "boundary" {
   description  = "Service Account allowing Boundary instance(s) to interact GCP resources and services."
 }
 
-resource "google_service_account_key" "boundary" {
-  service_account_id = google_service_account.boundary.name
-}
+# NOTE: google_service_account_key removed - VMs use attached SA via metadata server
+# This avoids org policy: iam.managed.disableServiceAccountKeyCreation
 
 #-----------------------------------------------------------------------------------
 # KMS Manager

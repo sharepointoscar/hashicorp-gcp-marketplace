@@ -74,13 +74,28 @@ function detect_architecture {
 
 function install_prereqs {
   local OS_DISTRO="$1"
-  log "[INFO]" "Installing required packages..."
+  log "[INFO]" "Checking required packages..."
+
+  # Check if required packages are already installed (pre-baked Marketplace image)
+  local MISSING_PACKAGES=""
+  for pkg in $REQUIRED_PACKAGES; do
+    if ! command -v "$pkg" &>/dev/null && ! dpkg -l "$pkg" &>/dev/null 2>&1; then
+      MISSING_PACKAGES="$MISSING_PACKAGES $pkg"
+    fi
+  done
+
+  if [[ -z "$MISSING_PACKAGES" ]]; then
+    log "[INFO]" "All required packages already installed (pre-baked image)."
+    return 0
+  fi
+
+  log "[INFO]" "Installing missing packages:$MISSING_PACKAGES"
 
   if [[ "$OS_DISTRO" == "ubuntu" ]]; then
-    apt-get update -y
-    apt-get install -y $REQUIRED_PACKAGES $ADDITIONAL_PACKAGES
+    apt-get update -y || log "[WARN]" "apt-get update failed - continuing with cached packages"
+    apt-get install -y $MISSING_PACKAGES $ADDITIONAL_PACKAGES || true
   elif [[ "$OS_DISTRO" == "rhel" ]]; then
-    yum install -y $REQUIRED_PACKAGES $ADDITIONAL_PACKAGES
+    yum install -y $MISSING_PACKAGES $ADDITIONAL_PACKAGES || true
   else
     log "ERROR" "Unsupported OS distro '$OS_DISTRO'. Exiting."
     exit_script 1
@@ -116,11 +131,11 @@ function scrape_vm_info {
 function user_group_create {
   log "[INFO]" "Creating Boundary user and group..."
 
-  # Create the dedicated as a system group
-  sudo groupadd --system $BOUNDARY_GROUP
+  # Create the dedicated as a system group (ignore if exists - pre-baked image)
+  sudo groupadd --system $BOUNDARY_GROUP 2>/dev/null || log "[INFO]" "Group $BOUNDARY_GROUP already exists"
 
-  # Create a dedicated user as a system user
-  sudo useradd --system --no-create-home -d $BOUNDARY_DIR_CONFIG -g $BOUNDARY_GROUP $BOUNDARY_USER
+  # Create a dedicated user as a system user (ignore if exists - pre-baked image)
+  sudo useradd --system --no-create-home -d $BOUNDARY_DIR_CONFIG -g $BOUNDARY_GROUP $BOUNDARY_USER 2>/dev/null || log "[INFO]" "User $BOUNDARY_USER already exists"
 
   log "[INFO]" "Done creating Boundary user and group"
 }
@@ -187,6 +202,16 @@ function checksum_verify {
 # install_boundary_binary downloads the boundary binary and puts it in dedicated bin directory
 function install_boundary_binary {
   local OS_ARCH="$1"
+
+  # Check if Boundary is already installed (pre-baked Marketplace image)
+  if [[ -x "$BOUNDARY_DIR_BIN/boundary" ]] || [[ -x "/usr/bin/boundary" ]]; then
+    log "[INFO]" "Boundary binary already installed (pre-baked image)."
+    # Ensure symlink exists
+    if [[ -x "/usr/bin/boundary" ]] && [[ ! -x "$BOUNDARY_DIR_BIN/boundary" ]]; then
+      sudo ln -sf /usr/bin/boundary $BOUNDARY_DIR_BIN/boundary 2>/dev/null || true
+    fi
+    return 0
+  fi
 
 	log "INFO" "Deploying Boundary binary to $BOUNDARY_DIR_BIN unzip and set permissions"
 	sudo unzip "$${PRODUCT}"_"$${BOUNDARY_VERSION}"_"$${OS_ARCH}".zip  boundary -d $BOUNDARY_DIR_BIN
@@ -349,8 +374,13 @@ function main {
   user_group_create
   directory_create
 
-	checksum_verify $OS_ARCH
-	log "INFO" "Checksum verification completed for Boundary binary."
+  # Skip download/verify if Boundary is already installed (pre-baked Marketplace image)
+  if [[ ! -x "/usr/bin/boundary" ]] && [[ ! -x "$BOUNDARY_DIR_BIN/boundary" ]]; then
+    checksum_verify $OS_ARCH
+    log "INFO" "Checksum verification completed for Boundary binary."
+  else
+    log "[INFO]" "Skipping download - Boundary already installed (pre-baked image)."
+  fi
 
   install_boundary_binary $OS_ARCH
 

@@ -26,3 +26,7 @@ boundary_database_password_secret_id = "boundary-db-password"
 # Required - Network Configuration
 vpc_name               = "default"
 controller_subnet_name = "default"
+
+# Proxy subnet for internal load balancer
+# Set to false if proxy-only subnet already exists in VPC/region
+create_proxy_subnet = false
