@@ -1,0 +1,233 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
+apiVersion: blueprints.cloud.google.com/v1alpha1
+kind: BlueprintMetadata
+metadata:
+  name: boundary-enterprise-display
+  annotations:
+    config.kubernetes.io/local-config: "true"
+spec:
+  info:
+    title: HashiCorp Boundary Enterprise
+    source:
+      repo: https://github.com/hashicorp/hashicorp-gcp-marketplace.git
+      sourceType: git
+  ui:
+    input:
+      sections:
+        - name: required
+          title: Required Configuration
+        - name: licensing
+          title: Licensing & TLS
+        - name: network
+          title: Network Configuration
+        - name: controller
+          title: Controller Configuration
+        - name: worker
+          title: Worker Configuration
+        - name: database
+          title: Database Configuration
+        - name: dns
+          title: DNS Configuration
+        - name: security
+          title: Security & Firewall
+        - name: advanced
+          title: Advanced Options
+      variables:
+        # Required Section
+        project_id:
+          name: project_id
+          title: Project ID
+          section: required
+        region:
+          name: region
+          title: Region
+          section: required
+          xGoogleProperty:
+            type: ET_GCE_REGION
+        boundary_fqdn:
+          name: boundary_fqdn
+          title: Boundary FQDN
+          section: required
+          placeholder: boundary.example.com
+          tooltip: Fully qualified domain name for Boundary. Must resolve to the load balancer IP.
+        # Licensing Section
+        boundary_license_secret_id:
+          name: boundary_license_secret_id
+          title: License Secret ID
+          section: licensing
+          tooltip: Secret Manager secret ID containing the Boundary Enterprise license.
+        boundary_tls_cert_secret_id:
+          name: boundary_tls_cert_secret_id
+          title: TLS Certificate Secret ID
+          section: licensing
+          tooltip: Secret Manager secret ID containing the TLS certificate (base64-encoded PEM).
+        boundary_tls_privkey_secret_id:
+          name: boundary_tls_privkey_secret_id
+          title: TLS Private Key Secret ID
+          section: licensing
+          tooltip: Secret Manager secret ID containing the TLS private key (base64-encoded PEM).
+        boundary_tls_ca_bundle_secret_id:
+          name: boundary_tls_ca_bundle_secret_id
+          title: CA Bundle Secret ID (Optional)
+          section: licensing
+          tooltip: Secret Manager secret ID for custom CA bundle (base64-encoded PEM).
+        # Network Section
+        vpc_name:
+          name: vpc_name
+          title: VPC Network
+          section: network
+          xGoogleProperty:
+            type: ET_GCE_NETWORK
+        controller_subnet_name:
+          name: controller_subnet_name
+          title: Controller Subnet
+          section: network
+          xGoogleProperty:
+            type: ET_GCE_SUBNETWORK
+        worker_subnet_name:
+          name: worker_subnet_name
+          title: Worker Subnet (Optional)
+          section: network
+          tooltip: Defaults to controller subnet if not specified.
+          xGoogleProperty:
+            type: ET_GCE_SUBNETWORK
+        vpc_project_id:
+          name: vpc_project_id
+          title: VPC Project ID (Optional)
+          section: network
+          tooltip: Only required if VPC is in a different project.
+        # Controller Section
+        boundary_version:
+          name: boundary_version
+          title: Boundary Version
+          section: controller
+        controller_instance_count:
+          name: controller_instance_count
+          title: Controller Instance Count
+          section: controller
+        controller_machine_type:
+          name: controller_machine_type
+          title: Controller Machine Type
+          section: controller
+          xGoogleProperty:
+            type: ET_GCE_MACHINE_TYPE
+        controller_disk_size_gb:
+          name: controller_disk_size_gb
+          title: Controller Disk Size (GB)
+          section: controller
+        api_load_balancing_scheme:
+          name: api_load_balancing_scheme
+          title: API Load Balancer Type
+          section: controller
+          enumValueLabels:
+            - label: External (Public)
+              value: external
+            - label: Internal (Private)
+              value: internal
+        # Worker Section
+        deploy_ingress_worker:
+          name: deploy_ingress_worker
+          title: Deploy Ingress Worker
+          section: worker
+        deploy_egress_worker:
+          name: deploy_egress_worker
+          title: Deploy Egress Worker
+          section: worker
+        ingress_worker_instance_count:
+          name: ingress_worker_instance_count
+          title: Ingress Worker Count
+          section: worker
+        egress_worker_instance_count:
+          name: egress_worker_instance_count
+          title: Egress Worker Count
+          section: worker
+        worker_machine_type:
+          name: worker_machine_type
+          title: Worker Machine Type
+          section: worker
+          xGoogleProperty:
+            type: ET_GCE_MACHINE_TYPE
+        worker_disk_size_gb:
+          name: worker_disk_size_gb
+          title: Worker Disk Size (GB)
+          section: worker
+        enable_session_recording:
+          name: enable_session_recording
+          title: Enable Session Recording (BSR)
+          section: worker
+          tooltip: Requires additional storage for session recordings.
+        # Database Section
+        postgres_version:
+          name: postgres_version
+          title: PostgreSQL Version
+          section: database
+          enumValueLabels:
+            - label: PostgreSQL 16
+              value: POSTGRES_16
+            - label: PostgreSQL 15
+              value: POSTGRES_15
+            - label: PostgreSQL 14
+              value: POSTGRES_14
+        postgres_machine_type:
+          name: postgres_machine_type
+          title: Database Machine Type
+          section: database
+        postgres_disk_size:
+          name: postgres_disk_size
+          title: Database Disk Size (GB)
+          section: database
+        postgres_availability_type:
+          name: postgres_availability_type
+          title: Database Availability
+          section: database
+          enumValueLabels:
+            - label: Regional (High Availability)
+              value: REGIONAL
+            - label: Zonal (Single Zone)
+              value: ZONAL
+        # DNS Section
+        create_cloud_dns_record:
+          name: create_cloud_dns_record
+          title: Create Cloud DNS Record
+          section: dns
+        cloud_dns_managed_zone:
+          name: cloud_dns_managed_zone
+          title: Cloud DNS Managed Zone
+          section: dns
+          tooltip: Required if Create Cloud DNS Record is enabled.
+        # Security Section
+        cidr_ingress_api_allow:
+          name: cidr_ingress_api_allow
+          title: API Access CIDR Ranges
+          section: security
+          tooltip: CIDR ranges allowed to access Boundary API (port 9200).
+        cidr_ingress_worker_allow:
+          name: cidr_ingress_worker_allow
+          title: Worker Access CIDR Ranges
+          section: security
+          tooltip: CIDR ranges allowed to access workers (port 9202).
+        cidr_ingress_ssh_allow:
+          name: cidr_ingress_ssh_allow
+          title: SSH Access CIDR Ranges
+          section: security
+          tooltip: CIDR ranges allowed for SSH via IAP.
+        # Advanced Section
+        boundary_image:
+          name: boundary_image
+          title: Boundary VM Image
+          section: advanced
+          invisible: true
+          xGoogleProperty:
+            type: ET_GCE_DISK_IMAGE
+        friendly_name_prefix:
+          name: friendly_name_prefix
+          title: Resource Name Prefix
+          section: advanced
+          tooltip: Prefix for uniquely naming resources (max 12 chars).
+        goog_cm_deployment_name:
+          name: goog_cm_deployment_name
+          title: Marketplace Deployment Name
+          section: advanced
+          invisible: true

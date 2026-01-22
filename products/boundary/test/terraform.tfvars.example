@@ -1,0 +1,43 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
+# Copy this file to terraform.tfvars and update the values
+
+#------------------------------------------------------------------------------
+# Required
+#------------------------------------------------------------------------------
+
+project_id        = "your-gcp-project-id"
+region            = "us-central1"
+boundary_fqdn     = "boundary.example.com"
+license_file_path = "../boundary.hclic"  # Path to your Boundary Enterprise license
+
+#------------------------------------------------------------------------------
+# Network
+#------------------------------------------------------------------------------
+
+vpc_name               = "default"
+controller_subnet_name = "default"
+
+#------------------------------------------------------------------------------
+# TLS (optional - leave commented for self-signed certificates)
+#------------------------------------------------------------------------------
+
+# tls_cert_path      = "/path/to/cert.pem"
+# tls_key_path       = "/path/to/key.pem"
+# tls_ca_bundle_path = "/path/to/ca-bundle.pem"
+
+#------------------------------------------------------------------------------
+# Deployment sizing
+#------------------------------------------------------------------------------
+
+controller_instance_count     = 1
+ingress_worker_instance_count = 1
+deploy_ingress_worker         = true
+deploy_egress_worker          = false
+
+#------------------------------------------------------------------------------
+# Naming
+#------------------------------------------------------------------------------
+
+friendly_name_prefix = "bnd"
