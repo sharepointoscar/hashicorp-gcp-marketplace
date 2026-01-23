@@ -107,28 +107,125 @@ This deployment is built on official HashiCorp Validated Design modules:
 ## Prerequisites
 
 1. **GCP Project** with billing enabled
-2. **Boundary Enterprise License** (`.hclic` file)
+2. **Boundary Enterprise License** (`boundary.hclic` file - included in this package)
 3. **Terraform** >= 1.5.0
-4. **gcloud CLI** authenticated
-5. **Required APIs enabled**:
-   - Compute Engine API
-   - Cloud SQL Admin API
-   - Cloud KMS API
-   - Secret Manager API
-   - Cloud DNS API (optional)
+4. **Packer** >= 1.9.0 (for building VM image)
+5. **gcloud CLI** authenticated
+6. **Required APIs enabled**:
+   ```bash
+   gcloud services enable \
+     compute.googleapis.com \
+     sqladmin.googleapis.com \
+     cloudkms.googleapis.com \
+     secretmanager.googleapis.com \
+     servicenetworking.googleapis.com \
+     iam.googleapis.com \
+     dns.googleapis.com
+   ```
 
-## Quick Start
+---
 
-### 1. Place Your License File
+## Deployment Steps Overview
+
+Deploying Boundary Enterprise requires three steps:
+
+| Step | Description | Tool |
+|------|-------------|------|
+| **Step 1** | Build the Boundary VM image | Packer |
+| **Step 2** | Create prerequisites (secrets, TLS certs) | Terraform |
+| **Step 3** | Deploy Boundary infrastructure | Terraform |
+
+---
+
+## Step 1: Build the Packer VM Image
+
+The Boundary VMs require a pre-built image with Boundary Enterprise installed. This image must be built in your GCP project before deploying the Terraform infrastructure.
+
+### 1.1 Configure Variables
 
 ```bash
-cd products/boundary
+cd packer
 
-# Place your Boundary Enterprise license file (gitignored)
-cp /path/to/your/boundary.hclic .
+# Set your GCP project ID
+export PROJECT_ID="your-gcp-project-id"
+export ZONE="us-central1-a"
+
+# Optional: Set your GCP Marketplace license (if applicable)
+export MARKETPLACE_LICENSE="projects/YOUR_PROJECT/global/licenses/YOUR_LICENSE"
 ```
 
-### 2. Configure Variables
+### 1.2 Initialize Packer
+
+```bash
+packer init boundary.pkr.hcl
+```
+
+### 1.3 Validate the Template
+
+```bash
+packer validate \
+  -var "project_id=$PROJECT_ID" \
+  -var "zone=$ZONE" \
+  boundary.pkr.hcl
+```
+
+### 1.4 Build the Image
+
+```bash
+packer build \
+  -var "project_id=$PROJECT_ID" \
+  -var "zone=$ZONE" \
+  boundary.pkr.hcl
+```
+
+**Build output:**
+```
+==> googlecompute.boundary: Creating image...
+==> googlecompute.boundary: Image created: hashicorp-ubuntu2204-boundary-x86-64-v0210-YYYYMMDD
+```
+
+### 1.5 Verify the Image
+
+```bash
+gcloud compute images list --project=$PROJECT_ID --filter="family=boundary-enterprise"
+```
+
+**Expected output:**
+```
+NAME                                              PROJECT              FAMILY               STATUS
+hashicorp-ubuntu2204-boundary-x86-64-v0210-XXXX   your-project-id      boundary-enterprise  READY
+```
+
+### 1.6 Note the Image Path
+
+Save the full image path for Step 3:
+```
+projects/YOUR_PROJECT_ID/global/images/hashicorp-ubuntu2204-boundary-x86-64-v0210-YYYYMMDD
+```
+
+Or use the image family (recommended - always uses latest):
+```
+projects/YOUR_PROJECT_ID/global/images/family/boundary-enterprise
+```
+
+---
+
+## Step 2 & 3: Deployment Options
+
+There are two deployment options:
+
+| Option | Use Case | Description |
+|--------|----------|-------------|
+| **Option A: Full Deployment** | Testing / Evaluation | Uses `test/` directory - automatically creates all prerequisites (secrets, TLS certs) and deploys Boundary |
+| **Option B: Two-Step Deployment** | Production / Marketplace | Step 2: Create prerequisites, Step 3: Deploy main solution with existing secret IDs |
+
+---
+
+## Option A: Full Deployment (Recommended for Testing)
+
+This option uses the `test/` directory which automatically creates all prerequisites and deploys the complete solution.
+
+### A.1 Configure Variables
 
 ```bash
 cd test
@@ -149,18 +246,13 @@ vpc_name               = "default"
 controller_subnet_name = "default"
 ```
 
-### 3. Deploy
+### A.2 Deploy
 
 ```bash
-cd products/boundary/test
+cd test
 
-# Initialize Terraform
+# Initialize and deploy
 terraform init
-
-# Review the plan
-terraform plan
-
-# Deploy (creates secrets, TLS certs, and full Boundary deployment)
 terraform apply
 ```
 
@@ -171,7 +263,111 @@ The deployment automatically:
 - Creates Cloud SQL PostgreSQL database
 - Sets up Cloud KMS encryption keys
 
-### 4. Access Boundary
+### A.3 Get Outputs
+
+```bash
+terraform output boundary_url
+terraform output controller_load_balancer_ip
+```
+
+---
+
+## Option B: Two-Step Deployment (Production / Marketplace Validation)
+
+This option separates prerequisite creation from the main deployment. Use this for GCP Marketplace validation or when you want to manage secrets separately.
+
+### Step 2: Create Prerequisites (Secrets & TLS Certificates)
+
+The `modules/prerequisites` module creates all required Secret Manager secrets.
+
+```bash
+# From the root boundary directory (not test/)
+cd ..
+
+# Create a temporary prerequisites configuration
+cat > prerequisites.tf << 'EOF'
+module "prerequisites" {
+  source = "./modules/prerequisites"
+
+  project_id           = var.project_id
+  friendly_name_prefix = var.goog_cm_deployment_name
+  boundary_fqdn        = var.boundary_fqdn
+  license_file_path    = var.license_file_path
+}
+
+variable "project_id" {
+  type = string
+}
+
+variable "goog_cm_deployment_name" {
+  type    = string
+  default = "mptest"
+}
+
+variable "boundary_fqdn" {
+  type    = string
+  default = "boundary.example.com"
+}
+
+variable "license_file_path" {
+  type    = string
+  default = "./boundary.hclic"
+}
+
+output "secret_ids" {
+  value = {
+    license     = module.prerequisites.license_secret_id
+    tls_cert    = module.prerequisites.tls_cert_secret_id
+    tls_key     = module.prerequisites.tls_key_secret_id
+    db_password = module.prerequisites.db_password_secret_id
+  }
+}
+EOF
+
+# Initialize and apply prerequisites
+terraform init
+terraform apply -var="project_id=YOUR_PROJECT_ID"
+```
+
+**Output** (save these values for Step 3):
+```
+secret_ids = {
+  "db_password" = "mptest-boundary-db-password"
+  "license"     = "mptest-boundary-license"
+  "tls_cert"    = "mptest-boundary-tls-cert"
+  "tls_key"     = "mptest-boundary-tls-key"
+}
+```
+
+### Step 3: Deploy Main Solution
+
+Now deploy the main Boundary solution using the secret IDs from Step 2.
+
+```bash
+# Clean up the temporary prerequisites.tf (keep the state files!)
+rm prerequisites.tf
+
+# Re-initialize to use the main module
+terraform init
+
+# Deploy main solution with the secret IDs
+terraform apply \
+  -var="project_id=YOUR_PROJECT_ID" \
+  -var-file=marketplace_test.tfvars
+```
+
+The `marketplace_test.tfvars` contains the secret ID references. Update them if you used a different `friendly_name_prefix`:
+
+```hcl
+boundary_license_secret_id           = "mptest-boundary-license"
+boundary_tls_cert_secret_id          = "mptest-boundary-tls-cert"
+boundary_tls_privkey_secret_id       = "mptest-boundary-tls-key"
+boundary_database_password_secret_id = "mptest-boundary-db-password"
+```
+
+---
+
+## Access Boundary
 
 After deployment:
 
