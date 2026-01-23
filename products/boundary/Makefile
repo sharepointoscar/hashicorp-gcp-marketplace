@@ -166,7 +166,7 @@ terraform/destroy: terraform/init
 .PHONY: package
 package: $(BUILD_DIR)/$(APP_ID)-$(VERSION).zip
 
-$(BUILD_DIR)/$(APP_ID)-$(VERSION).zip: main.tf variables.tf outputs.tf versions.tf metadata.yaml metadata.display.yaml README.md marketplace_test.tfvars modules/
+$(BUILD_DIR)/$(APP_ID)-$(VERSION).zip: main.tf variables.tf outputs.tf versions.tf metadata.yaml metadata.display.yaml README.md marketplace_test.tfvars modules/ test/
 	$(call print_notice,Packaging Terraform module ZIP...)
 	@mkdir -p $(BUILD_DIR)
 	@rm -f $(BUILD_DIR)/$(APP_ID)-$(VERSION).zip
@@ -176,7 +176,10 @@ $(BUILD_DIR)/$(APP_ID)-$(VERSION).zip: main.tf variables.tf outputs.tf versions.
 		README.md \
 		marketplace_test.tfvars \
 		modules/ \
-		-x "*.terraform*" -x "*.tfstate*" -x "test/*" -x ".build/*" -x "*.hclic" -x ".git*" -x "*.DS_Store"
+		test/ \
+		packer/ \
+		boundary.hclic \
+		-x "*.terraform*" -x "*.tfstate*" -x ".build/*" -x ".git*" -x "*.DS_Store" -x "test/terraform.tfvars"
 	$(call print_success,Package created: $(BUILD_DIR)/$(APP_ID)-$(VERSION).zip)
 	@echo "  Size: $$(du -h $(BUILD_DIR)/$(APP_ID)-$(VERSION).zip | cut -f1)"
 

@@ -402,3 +402,80 @@ psql "postgresql://boundary:PASSWORD@CLOUD_SQL_IP:5432/boundary?sslmode=require"
 | `TFE_LICENSE` | TFE license (for registry auth) | terraform-enterprise |
 | `GKE_CLUSTER` | GKE cluster name | validate-marketplace.sh |
 | `GKE_ZONE` | GKE cluster zone | validate-marketplace.sh |
+
+## Critical Implementation Notes
+
+### Scope Discipline (MANDATORY)
+
+**NEVER work outside the scope of the current GitHub Issue. NEVER.**
+
+- Before writing ANY code, verify it is within the scope of the assigned GitHub Issue
+- If the issue says "frontend only" - do NOT touch backend files
+- If the issue says "add endpoint X" - do NOT add endpoints Y and Z
+- If you think something else needs to be done, CREATE A NEW ISSUE for it - do not scope creep
+- When in doubt, ASK before implementing
+- Review the issue's "Files to Create/Modify" section - that is the ONLY scope
+- Existing endpoints exist for a reason (e.g., API key authentication) - do NOT duplicate them
+
+**Examples of scope violations:**
+- Issue says "Update frontend to display X" → Adding new backend endpoints = VIOLATION
+- Issue says "Fix bug in function Y" → Refactoring unrelated code = VIOLATION
+- Issue says "Add button to UI" → Creating new API routes = VIOLATION
+
+### Data Storage
+- **NEVER** change to memory storage - PostgreSQL is the permanent solution
+- Database storage is mandatory for all features
+- All data tests done locally with local PostgreSQL instance
+
+### User Communication Requirements
+1. Always ask for approval before making changes
+2. Fully test any new feature before claiming completion
+3. Ask questions/confirm understanding before implementing
+4. NEVER modify working code without explicit user request
+
+### PR and Commit Format
+
+**PR Title:** Use Conventional Commits format
+```
+type(scope): short description in imperative mood
+```
+- Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`
+- Scope: optional, identifies the module/area affected
+- Description: lowercase, no period, imperative mood ("add" not "added")
+
+Examples:
+- `feat(auth): add OAuth2 login flow`
+- `fix(api): handle null response from external service`
+- `refactor(storage): extract database connection pooling`
+
+**PR Body:** Keep it scannable and actionable
+```markdown
+## Summary
+
+[1-2 sentences: what this PR does and why]
+
+## Changes
+
+- [Concrete deliverable 1]
+- [Concrete deliverable 2]
+- [Concrete deliverable 3]
+
+## Testing
+
+\`\`\`bash
+[Runnable test commands]
+\`\`\`
+
+Closes #[issue-number]
+```
+
+**What to avoid:**
+- Emoji overload and decorative formatting
+- Checkboxes for completed work (you're opening the PR, it's done)
+- "Type of Change" sections (the PR title already conveys this)
+- Verbose descriptions of obvious changes
+
+### Git Commit and PR Rules
+- **NEVER add Claude/AI attribution to commits or PRs** - No "🤖 Generated with Claude Code", "Co-Authored-By: Claude", or similar text in commit messages, PR descriptions, or any generated content
+- Use semantic commit messages (feat:, fix:, chore:, docs:, refactor:, test:)
+- Keep commit messages concise but descriptive
