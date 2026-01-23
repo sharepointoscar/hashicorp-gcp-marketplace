@@ -1,0 +1,23 @@
+{
+  "builds": [
+    {
+      "name": "boundary",
+      "builder_type": "googlecompute",
+      "build_time": 1768704830,
+      "files": null,
+      "artifact_id": "boundary-enterprise-0-21-0",
+      "packer_run_uuid": "7c3f516d-f065-f7b7-ce56-575b456c64b5",
+      "custom_data": null
+    },
+    {
+      "name": "boundary",
+      "builder_type": "googlecompute",
+      "build_time": 1768709006,
+      "files": null,
+      "artifact_id": "hashicorp-ubuntu2204-boundary-x86-64-v0210-20260117",
+      "packer_run_uuid": "b5296040-20e9-92f8-b95e-a504bd66ae95",
+      "custom_data": null
+    }
+  ],
+  "last_run_uuid": "b5296040-20e9-92f8-b95e-a504bd66ae95"
+}
