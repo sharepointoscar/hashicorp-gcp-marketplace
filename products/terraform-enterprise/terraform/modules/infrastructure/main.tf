@@ -104,6 +104,9 @@ resource "google_sql_database" "tfe" {
   name     = "tfe"
   instance = google_sql_database_instance.tfe.name
   project  = var.project_id
+
+  # Database must be deleted before the user (user owns objects in the database)
+  depends_on = [google_sql_user.tfe]
 }
 
 resource "google_sql_user" "tfe" {
@@ -111,6 +114,10 @@ resource "google_sql_user" "tfe" {
   instance = google_sql_database_instance.tfe.name
   password = random_password.database.result
   project  = var.project_id
+
+  # Deletion policy: ABANDON allows Terraform to remove from state without deleting
+  # This prevents errors when user owns objects; the instance deletion will clean up
+  deletion_policy = "ABANDON"
 }
 
 # -----------------------------------------------------------------------------

@@ -410,6 +410,16 @@ pdb:
   annotations: {}
   labels: {}
 
+# GCP Marketplace Usage-Based Billing (UBB) Agent
+# This sidecar reports usage metrics to GCP Marketplace
+ubbagent:
+  enabled: false
+  image: ""  # Set by deployer, e.g., gcr.io/PROJECT/terraform-enterprise/ubbagent:TAG
+  reportingServiceName: ""  # Set by deployer, e.g., terraform-enterprise.endpoints.PROJECT.cloud.goog
+
+# GCP Marketplace reporting secret (for UBB)
+reportingSecret: ""
+
 # CSI driver settings for Vault provider
 csi:
   enabled: false
@@ -437,3 +447,51 @@ csi:
     secretName: ""
     # Type of the Kubernetes secret. Example: Opaque
     type: ""
+
+# =============================================================================
+# GCP Marketplace Schema Properties
+# These map to the GCP Marketplace schema.yaml for deployer_helm integration
+# The templates use these values to configure TFE
+# =============================================================================
+
+# TFE main image (set by deployer from schema)
+tfeImage: ""
+
+# UBB agent image (set by deployer from schema)
+ubbagentImage: ""
+
+# Infrastructure (pre-provisioned via Terraform)
+databaseHost: ""
+databaseName: "tfe"
+databaseUser: "tfe"
+databasePassword: ""
+redisHost: ""
+redisPassword: ""
+objectStorageBucket: ""
+objectStorageProject: ""
+
+# TFE Configuration
+hostname: ""
+tfeLicense: ""
+encryptionPassword: ""
+
+# TLS Certificates (base64-encoded)
+tlsCertificate: ""
+tlsPrivateKey: ""
+tlsCACertificate: ""
+
+# Service account name (created by deployer)
+tfeServiceAccount: ""
+
+# =============================================================================
+# Infrastructure Prerequisites
+# =============================================================================
+# TFE requires the following infrastructure to be pre-provisioned:
+# 1. Cloud SQL PostgreSQL instance (private IP)
+# 2. Memorystore Redis instance (private IP)
+# 3. GCS bucket for object storage
+#
+# Use the Terraform code in terraform/ directory to provision these resources:
+#   cd terraform && terraform apply -var-file=marketplace_test.tfvars
+#
+# Then use the output values when deploying TFE via GCP Marketplace.

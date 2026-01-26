@@ -58,15 +58,27 @@ spec:
       securityContext:
         {{- toYaml .Values.securityContext | nindent 8 }}
       volumes:
+        {{- if and .Values.tlsCertificate .Values.tlsPrivateKey }}
+        # GCP Marketplace TLS certificates
+        - name: certificates
+          secret:
+            secretName: terraform-enterprise-tls-gcp
+        {{- else }}
         - name: certificates
           secret:
             secretName: {{ .Values.tls.certificateSecret }}
+        {{- end }}
         {{- if or (and .Values.tlsSecondary.certData .Values.tlsSecondary.keyData) .Values.tlsSecondary.certificateSecret }}
         - name: certificates-secondary
           secret:
-            secretName: {{ .Values.tlsSecondary.certificateSecret | default "terraform-enterprise-certificates-secondary" }}  
+            secretName: {{ .Values.tlsSecondary.certificateSecret | default "terraform-enterprise-certificates-secondary" }}
         {{- end }}
-        {{- if .Values.tls.caCertData }}
+        {{- if .Values.tlsCACertificate }}
+        # GCP Marketplace CA certificate
+        - name: ca-certificates
+          secret:
+            secretName: terraform-enterprise-ca-gcp
+        {{- else if .Values.tls.caCertData }}
         - name: ca-certificates
           secret:
             secretName: terraform-enterprise-ca-certificates
@@ -89,6 +101,13 @@ spec:
             volumeAttributes:
               secretProviderClass: "{{ .Values.csi.secretProviderClass }}"
         {{- end }}
+        {{- if .Values.ubbagent.enabled }}
+        - name: ubbagent-config
+          configMap:
+            name: {{ .Release.Name }}-ubbagent-config
+        - name: ubbagent-state
+          emptyDir: {}
+        {{- end }}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -96,18 +115,26 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.tfeServiceAccount }}
+      serviceAccountName: {{ .Values.tfeServiceAccount }}
+      {{- else if .Values.serviceAccount }}
       {{- if .Values.serviceAccount.enabled }}
-      {{- if .Values.serviceAccount.name}}
+      {{- if .Values.serviceAccount.name }}
       serviceAccountName: {{ .Values.serviceAccount.name }}
       {{- else }}
       serviceAccountName: {{ .Release.Namespace }}
       {{- end }}
       {{- end }}
+      {{- end }}
       initContainers:
-        {{ toYaml .Values.initContainers | nindent 8}}
+        {{- if .Values.initContainers }}
+        {{- toYaml .Values.initContainers | nindent 8 }}
+        {{- end }}
       containers:
       - name: terraform-enterprise
-        {{- if .Values.image.name }}
+        {{- if .Values.tfeImage }}
+        image: {{ .Values.tfeImage }}
+        {{- else if .Values.image.name }}
         image: {{ .Values.image.repository }}/{{ .Values.image.name }}:{{ .Values.image.tag }}
         {{- else }}
         image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
@@ -168,7 +195,12 @@ spec:
           - name: certificates
             mountPath: {{ .Values.tls.keyMountPath }}
             subPath: tls.key
-          {{- if .Values.tls.caCertData }}
+          {{- if .Values.tlsCACertificate }}
+          # GCP Marketplace CA certificate
+          - name: ca-certificates
+            mountPath: /etc/ssl/private/ca-certificate.crt
+            subPath: ca.crt
+          {{- else if .Values.tls.caCertData }}
           - name: ca-certificates
             mountPath: {{ include "cacert.path" . }}
             subPath: {{ .Values.tls.caCertFileName }}
@@ -211,3 +243,38 @@ spec:
         - containerPort: {{.Values.tfe.metrics.httpPort}}
         - containerPort: {{.Values.tfe.metrics.httpsPort}}
         {{- end }}
+      {{- if .Values.ubbagent.enabled }}
+      # GCP Marketplace Usage-Based Billing (UBB) Agent sidecar
+      - name: ubbagent
+        image: {{ .Values.ubbagent.image }}
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: AGENT_CONFIG_FILE
+          value: /etc/ubbagent/config.yaml
+        - name: AGENT_LOCAL_PORT
+          value: "4567"
+        - name: AGENT_STATE_DIR
+          value: /var/lib/ubbagent
+        - name: AGENT_ENCODED_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.reportingSecret }}
+              key: reporting-key
+        - name: AGENT_CONSUMER_ID
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.reportingSecret }}
+              key: consumer-id
+        volumeMounts:
+        - name: ubbagent-config
+          mountPath: /etc/ubbagent
+        - name: ubbagent-state
+          mountPath: /var/lib/ubbagent
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+      {{- end }}

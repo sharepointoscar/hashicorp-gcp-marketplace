@@ -131,3 +131,56 @@ entries as `valueFrom` environment variables in the Values file.
       key: {{ $val.key }}
 {{- end }}
 {{- end }}
+
+{{/*
+GCP Marketplace: Map flat schema properties to TFE environment variables
+These are used when deploying via GCP Marketplace deployer_helm
+Infrastructure must be pre-provisioned via Terraform (see terraform/ directory)
+*/}}
+{{- define "helpers.gcp-marketplace-env-variables"}}
+{{- if .Values.hostname }}
+TFE_HOSTNAME: {{ .Values.hostname | quote }}
+{{- end }}
+{{- if .Values.databaseHost }}
+TFE_DATABASE_HOST: {{ .Values.databaseHost | quote }}
+{{- end }}
+{{- if .Values.databaseName }}
+TFE_DATABASE_NAME: {{ .Values.databaseName | quote }}
+{{- end }}
+{{- if .Values.databaseUser }}
+TFE_DATABASE_USER: {{ .Values.databaseUser | quote }}
+{{- end }}
+{{- if .Values.redisHost }}
+TFE_REDIS_HOST: {{ .Values.redisHost | quote }}
+TFE_REDIS_USE_AUTH: "true"
+{{- end }}
+{{- if .Values.objectStorageBucket }}
+TFE_OBJECT_STORAGE_TYPE: "google"
+TFE_OBJECT_STORAGE_GOOGLE_BUCKET: {{ .Values.objectStorageBucket | quote }}
+{{- end }}
+{{- if .Values.objectStorageProject }}
+TFE_OBJECT_STORAGE_GOOGLE_PROJECT: {{ .Values.objectStorageProject | quote }}
+{{- end }}
+{{- if .Values.tlsCACertificate }}
+TFE_TLS_CA_BUNDLE_FILE: "/etc/ssl/private/ca-certificate.crt"
+{{- end }}
+{{- end }}
+
+{{/*
+GCP Marketplace: Map flat schema properties to TFE secrets (base64 encoded)
+Infrastructure must be pre-provisioned via Terraform (see terraform/ directory)
+*/}}
+{{- define "helpers.gcp-marketplace-env-secrets"}}
+{{- if .Values.databasePassword }}
+TFE_DATABASE_PASSWORD: {{ .Values.databasePassword | b64enc }}
+{{- end }}
+{{- if .Values.redisPassword }}
+TFE_REDIS_PASSWORD: {{ .Values.redisPassword | b64enc }}
+{{- end }}
+{{- if .Values.tfeLicense }}
+TFE_LICENSE: {{ .Values.tfeLicense | b64enc }}
+{{- end }}
+{{- if .Values.encryptionPassword }}
+TFE_ENCRYPTION_PASSWORD: {{ .Values.encryptionPassword | b64enc }}
+{{- end }}
+{{- end }}

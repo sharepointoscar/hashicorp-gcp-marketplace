@@ -1,0 +1,55 @@
+# health-check.yaml - TFE health check test for GCP Marketplace verification
+#
+# This test waits for TFE to become healthy by checking the /_health_check endpoint.
+# TFE requires >600 seconds to fully initialize, so we wait up to 15 minutes.
+
+actions:
+- name: Wait for TFE service to become healthy
+  bashTest:
+    script: |
+      #!/bin/bash
+      set -e
+
+      echo "=== TFE Health Check Test ==="
+      echo "Service: ${APP_INSTANCE_NAME}.${NAMESPACE}.svc.cluster.local"
+
+      # TFE needs >600s to fully start - wait up to 15 minutes (90 attempts * 10s)
+      MAX_ATTEMPTS=90
+      SLEEP_INTERVAL=10
+
+      for i in $(seq 1 $MAX_ATTEMPTS); do
+        echo "Attempt $i/$MAX_ATTEMPTS: checking TFE health..."
+
+        # Try to get health status
+        RESPONSE=$(curl -sk "https://${APP_INSTANCE_NAME}.${NAMESPACE}.svc.cluster.local/_health_check" 2>/dev/null || true)
+
+        if [ -n "$RESPONSE" ]; then
+          echo "Response: $RESPONSE"
+
+          # Check if vault is UP (indicates TFE is fully initialized)
+          if echo "$RESPONSE" | grep -q '"vault":"UP"'; then
+            echo "=== TFE is healthy! ==="
+            echo "Full response: $RESPONSE"
+            exit 0
+          fi
+
+          # Check individual components
+          POSTGRES_STATUS=$(echo "$RESPONSE" | grep -o '"postgres":"[^"]*"' || echo "unknown")
+          REDIS_STATUS=$(echo "$RESPONSE" | grep -o '"redis":"[^"]*"' || echo "unknown")
+          VAULT_STATUS=$(echo "$RESPONSE" | grep -o '"vault":"[^"]*"' || echo "unknown")
+
+          echo "  postgres: $POSTGRES_STATUS"
+          echo "  redis: $REDIS_STATUS"
+          echo "  vault: $VAULT_STATUS"
+        else
+          echo "No response from TFE yet..."
+        fi
+
+        sleep $SLEEP_INTERVAL
+      done
+
+      echo "=== TFE health check failed after $((MAX_ATTEMPTS * SLEEP_INTERVAL)) seconds ==="
+      exit 1
+    expect:
+      exitCode:
+        equals: 0
