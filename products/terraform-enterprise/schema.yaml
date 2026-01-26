@@ -39,66 +39,14 @@ properties:
       type: NAMESPACE
 
   # ---------------------------------------------------------------------------
-  # Config Connector - Auto-provision Infrastructure
-  # When enabled, Cloud SQL, Redis, and GCS are provisioned automatically
-  # ---------------------------------------------------------------------------
-
-  configConnector.enabled:
-    type: boolean
-    title: Enable Auto-Provisioning
-    description: "Auto-provision Cloud SQL, Redis, and GCS using Config Connector (requires Config Connector in cluster)"
-    default: true
-
-  configConnector.projectId:
-    type: string
-    title: GCP Project ID
-    description: "GCP project ID for provisioning infrastructure"
-
-  configConnector.googleServiceAccount:
-    type: string
-    title: Config Connector Google Service Account
-    description: "GSA email with permissions for Cloud SQL, Redis, GCS (e.g., tfe-cc@project.iam.gserviceaccount.com)"
-
-  configConnector.networkName:
-    type: string
-    title: VPC Network Name
-    description: "VPC network for private connectivity"
-    default: "default"
-
-  configConnector.sql.region:
-    type: string
-    title: Cloud SQL Region
-    default: "us-central1"
-
-  configConnector.sql.tier:
-    type: string
-    title: Cloud SQL Machine Type
-    description: "Machine type for Cloud SQL instance"
-    default: "db-custom-4-16384"
-
-  configConnector.redis.region:
-    type: string
-    title: Redis Region
-    default: "us-central1"
-
-  configConnector.redis.memorySizeGb:
-    type: integer
-    title: Redis Memory (GB)
-    default: 4
-
-  configConnector.gcs.location:
-    type: string
-    title: GCS Bucket Location
-    default: "US"
-
-  # ---------------------------------------------------------------------------
-  # Infrastructure (only required if configConnector.enabled=false)
+  # Infrastructure (pre-provisioned via Terraform)
+  # Use: cd terraform && terraform apply -var-file=marketplace_test.tfvars
   # ---------------------------------------------------------------------------
 
   databaseHost:
     type: string
     title: Database Host
-    description: "Cloud SQL PostgreSQL private IP (only if not auto-provisioning)"
+    description: "Cloud SQL PostgreSQL private IP address"
 
   databaseName:
     type: string
@@ -120,7 +68,7 @@ properties:
   redisHost:
     type: string
     title: Redis Host
-    description: "Memorystore Redis private IP (only if not auto-provisioning)"
+    description: "Memorystore Redis host:port (e.g., 10.0.0.5:6379)"
 
   redisPassword:
     type: string
@@ -132,7 +80,7 @@ properties:
   objectStorageBucket:
     type: string
     title: GCS Bucket Name
-    description: "GCS bucket for TFE object storage (only if not auto-provisioning)"
+    description: "GCS bucket for TFE object storage"
 
   objectStorageProject:
     type: string
@@ -205,24 +153,6 @@ properties:
           - apiGroups: ['']
             resources: ['secrets', 'configmaps']
             verbs: ['get', 'list', 'watch', 'create', 'update', 'delete']
-        - type: Role
-          rulesType: CUSTOM
-          rules:
-          - apiGroups: ['sql.cnrm.cloud.google.com']
-            resources: ['sqlinstances', 'sqldatabases', 'sqlusers']
-            verbs: ['get', 'list', 'watch']
-        - type: Role
-          rulesType: CUSTOM
-          rules:
-          - apiGroups: ['redis.cnrm.cloud.google.com']
-            resources: ['redisinstances']
-            verbs: ['get', 'list', 'watch']
-        - type: Role
-          rulesType: CUSTOM
-          rules:
-          - apiGroups: ['storage.cnrm.cloud.google.com']
-            resources: ['storagebuckets', 'storagebucketaccesscontrols']
-            verbs: ['get', 'list', 'watch']
 
   # ---------------------------------------------------------------------------
   # Billing / Reporting
@@ -236,7 +166,11 @@ properties:
 required:
   - name
   - namespace
-  - configConnector.projectId
+  - databaseHost
+  - databasePassword
+  - redisHost
+  - objectStorageBucket
+  - objectStorageProject
   - hostname
   - tfeLicense
   - encryptionPassword

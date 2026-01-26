@@ -3,47 +3,6 @@ Copyright IBM Corp. 2023, 2025
 SPDX-License-Identifier: MPL-2.0
 */}}
 
-{{- if .Values.configConnector.enabled }}
----
-# Role for reading Config Connector resources (used by wait-for-infra initContainer)
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: {{ .Release.Name }}-config-connector-reader
-  namespace: {{ .Release.Namespace }}
-  labels:
-    app.kubernetes.io/name: {{ .Release.Name }}
-rules:
-- apiGroups: ['sql.cnrm.cloud.google.com']
-  resources: ['sqlinstances', 'sqldatabases', 'sqlusers']
-  verbs: ['get', 'list', 'watch']
-- apiGroups: ['redis.cnrm.cloud.google.com']
-  resources: ['redisinstances']
-  verbs: ['get', 'list', 'watch']
-- apiGroups: ['storage.cnrm.cloud.google.com']
-  resources: ['storagebuckets', 'storagebucketaccesscontrols']
-  verbs: ['get', 'list', 'watch']
-- apiGroups: ['']
-  resources: ['configmaps', 'secrets']
-  verbs: ['get', 'list', 'watch', 'create', 'update', 'patch']
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: {{ .Release.Name }}-config-connector-reader
-  namespace: {{ .Release.Namespace }}
-  labels:
-    app.kubernetes.io/name: {{ .Release.Name }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: {{ .Release.Name }}-config-connector-reader
-subjects:
-- kind: ServiceAccount
-  name: {{ .Values.tfeServiceAccount | default (printf "%s-tfeserviceaccount" .Release.Name) }}
-  namespace: {{ .Release.Namespace }}
-{{- end }}
-
 {{- if .Values.agents.rbac.enabled }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1

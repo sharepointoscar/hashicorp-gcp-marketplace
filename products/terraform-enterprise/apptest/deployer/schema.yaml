@@ -40,62 +40,14 @@ properties:
     x-google-marketplace:
       type: NAMESPACE
 
-  # Config Connector - enable auto-provisioning for tests
-  configConnector.enabled:
-    type: boolean
-    default: true
+  # ---------------------------------------------------------------------------
+  # Infrastructure (pre-provisioned via Terraform)
+  # Values from: terraform output -json marketplace_inputs
+  # ---------------------------------------------------------------------------
 
-  configConnector.projectId:
-    type: string
-    default: "ibm-software-mp-project-test"
-
-  configConnector.googleServiceAccount:
-    type: string
-    default: "tfe-config-connector@ibm-software-mp-project-test.iam.gserviceaccount.com"
-
-  configConnector.networkName:
-    type: string
-    default: "default"
-
-  configConnector.sql.region:
-    type: string
-    default: "us-central1"
-
-  configConnector.sql.tier:
-    type: string
-    default: "db-custom-2-8192"
-
-  configConnector.redis.region:
-    type: string
-    default: "us-central1"
-
-  configConnector.redis.memorySizeGb:
-    type: integer
-    default: 4
-
-  configConnector.gcs.location:
-    type: string
-    default: "US"
-
-  # Disable IAM for GCS - StorageBucketAccessControl requires Workload Identity
-  # binding which doesn't exist for dynamic test namespaces
-  configConnector.gcs.enableIAM:
-    type: boolean
-    default: false
-
-  # Agents namespace and RBAC - disabled for mpdev verify (deployer can't create cluster-scoped resources)
-  agents.namespace.enabled:
-    type: boolean
-    default: false
-
-  agents.rbac.enabled:
-    type: boolean
-    default: false
-
-  # Infrastructure - not required when configConnector.enabled=true
   databaseHost:
     type: string
-    default: ""
+    default: "10.100.1.203:5432"
 
   databaseName:
     type: string
@@ -107,29 +59,32 @@ properties:
 
   databasePassword:
     type: string
-    default: ""
+    default: "3g69EU8wpyTZaKafeTKozXXF"
     x-google-marketplace:
       type: MASKED_FIELD
 
   redisHost:
     type: string
-    default: ""
+    default: "10.100.0.20:6379"
 
   redisPassword:
     type: string
-    default: ""
+    default: "a3d7c6fd-0d74-4d7e-a0e7-c1c2a5093a65"
     x-google-marketplace:
       type: MASKED_FIELD
 
   objectStorageBucket:
     type: string
-    default: ""
+    default: "tfe-fg7v-objects-ibm-software-mp-project-test"
 
   objectStorageProject:
     type: string
     default: "ibm-software-mp-project-test"
 
+  # ---------------------------------------------------------------------------
   # TFE Configuration - test defaults
+  # ---------------------------------------------------------------------------
+
   hostname:
     type: string
     default: "tfe.example.com"
@@ -165,7 +120,23 @@ properties:
     x-google-marketplace:
       type: MASKED_FIELD
 
+  # ---------------------------------------------------------------------------
+  # Agents namespace and RBAC
+  # Disabled for mpdev verify (deployer can't create cluster-scoped resources)
+  # ---------------------------------------------------------------------------
+
+  agents.namespace.enabled:
+    type: boolean
+    default: false
+
+  agents.rbac.enabled:
+    type: boolean
+    default: false
+
+  # ---------------------------------------------------------------------------
   # Service Account
+  # ---------------------------------------------------------------------------
+
   tfeServiceAccount:
     type: string
     x-google-marketplace:
@@ -179,26 +150,11 @@ properties:
           - apiGroups: ['']
             resources: ['secrets', 'configmaps']
             verbs: ['get', 'list', 'watch', 'create', 'update', 'delete']
-        - type: Role
-          rulesType: CUSTOM
-          rules:
-          - apiGroups: ['sql.cnrm.cloud.google.com']
-            resources: ['sqlinstances', 'sqldatabases', 'sqlusers']
-            verbs: ['get', 'list', 'watch']
-        - type: Role
-          rulesType: CUSTOM
-          rules:
-          - apiGroups: ['redis.cnrm.cloud.google.com']
-            resources: ['redisinstances']
-            verbs: ['get', 'list', 'watch']
-        - type: Role
-          rulesType: CUSTOM
-          rules:
-          - apiGroups: ['storage.cnrm.cloud.google.com']
-            resources: ['storagebuckets', 'storagebucketaccesscontrols']
-            verbs: ['get', 'list', 'watch']
 
+  # ---------------------------------------------------------------------------
   # Billing
+  # ---------------------------------------------------------------------------
+
   reportingSecret:
     type: string
     x-google-marketplace:
@@ -207,5 +163,4 @@ properties:
 required:
   - name
   - namespace
-  - configConnector.projectId
   - reportingSecret

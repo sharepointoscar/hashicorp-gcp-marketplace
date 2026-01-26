@@ -484,56 +484,14 @@ tlsCACertificate: ""
 tfeServiceAccount: ""
 
 # =============================================================================
-# GCP Config Connector - Infrastructure Provisioning
-# When enabled, provisions Cloud SQL, Redis, and GCS as part of Helm deployment
-# Requires Config Connector to be installed in the GKE cluster
+# Infrastructure Prerequisites
 # =============================================================================
-
-configConnector:
-  # Enable Config Connector infrastructure provisioning
-  enabled: false
-
-  # GCP Project ID (required when enabled)
-  projectId: ""
-
-  # Google Service Account for Config Connector (required when enabled)
-  # This GSA must have:
-  # - roles/cloudsql.admin
-  # - roles/redis.admin
-  # - roles/storage.admin
-  # - roles/monitoring.metricWriter
-  # Example: tfe-config-connector@my-project.iam.gserviceaccount.com
-  googleServiceAccount: ""
-
-  # VPC Network name for private connectivity
-  networkName: "default"
-
-  # Cloud SQL PostgreSQL configuration
-  sql:
-    databaseVersion: "POSTGRES_16"
-    region: "us-central1"
-    tier: "db-custom-4-16384"
-    availabilityType: "ZONAL"  # ZONAL or REGIONAL
-    diskSize: 50  # GB
-    diskType: "PD_SSD"
-
-  # Memorystore Redis configuration
-  redis:
-    region: "us-central1"
-    tier: "BASIC"  # BASIC or STANDARD_HA
-    memorySizeGb: 4
-    version: "REDIS_7_0"
-    maintenanceWindow:
-      day: "SUNDAY"
-      hour: 2
-
-  # GCS bucket configuration
-  gcs:
-    location: "US"
-    storageClass: "STANDARD"
-    enableIAM: true
-    lifecycleRules: []
-    # - action:
-    #     type: Delete
-    #   condition:
-    #     age: 365
+# TFE requires the following infrastructure to be pre-provisioned:
+# 1. Cloud SQL PostgreSQL instance (private IP)
+# 2. Memorystore Redis instance (private IP)
+# 3. GCS bucket for object storage
+#
+# Use the Terraform code in terraform/ directory to provision these resources:
+#   cd terraform && terraform apply -var-file=marketplace_test.tfvars
+#
+# Then use the output values when deploying TFE via GCP Marketplace.

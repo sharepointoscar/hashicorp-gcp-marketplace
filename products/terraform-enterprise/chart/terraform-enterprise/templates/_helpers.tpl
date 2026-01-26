@@ -135,15 +135,12 @@ entries as `valueFrom` environment variables in the Values file.
 {{/*
 GCP Marketplace: Map flat schema properties to TFE environment variables
 These are used when deploying via GCP Marketplace deployer_helm
-Note: When configConnector.enabled=true, infrastructure endpoints are provided
-by the infra-endpoints ConfigMap created by the wait job, so we skip those here.
+Infrastructure must be pre-provisioned via Terraform (see terraform/ directory)
 */}}
 {{- define "helpers.gcp-marketplace-env-variables"}}
 {{- if .Values.hostname }}
 TFE_HOSTNAME: {{ .Values.hostname | quote }}
 {{- end }}
-{{- /* Only set infrastructure env vars if NOT using Config Connector */}}
-{{- if not .Values.configConnector.enabled }}
 {{- if .Values.databaseHost }}
 TFE_DATABASE_HOST: {{ .Values.databaseHost | quote }}
 {{- end }}
@@ -164,7 +161,6 @@ TFE_OBJECT_STORAGE_GOOGLE_BUCKET: {{ .Values.objectStorageBucket | quote }}
 {{- if .Values.objectStorageProject }}
 TFE_OBJECT_STORAGE_GOOGLE_PROJECT: {{ .Values.objectStorageProject | quote }}
 {{- end }}
-{{- end }}
 {{- if .Values.tlsCACertificate }}
 TFE_TLS_CA_BUNDLE_FILE: "/etc/ssl/private/ca-certificate.crt"
 {{- end }}
@@ -172,20 +168,15 @@ TFE_TLS_CA_BUNDLE_FILE: "/etc/ssl/private/ca-certificate.crt"
 
 {{/*
 GCP Marketplace: Map flat schema properties to TFE secrets (base64 encoded)
-Note: When configConnector.enabled=true, infrastructure secrets (DB/Redis passwords)
-are provided by the infra-secrets Secret created by the wait job.
+Infrastructure must be pre-provisioned via Terraform (see terraform/ directory)
 */}}
 {{- define "helpers.gcp-marketplace-env-secrets"}}
-{{- /* Only set infrastructure secrets if NOT using Config Connector */}}
-{{- if not .Values.configConnector.enabled }}
 {{- if .Values.databasePassword }}
 TFE_DATABASE_PASSWORD: {{ .Values.databasePassword | b64enc }}
 {{- end }}
 {{- if .Values.redisPassword }}
 TFE_REDIS_PASSWORD: {{ .Values.redisPassword | b64enc }}
 {{- end }}
-{{- end }}
-{{- /* License and encryption password are always set from user input */}}
 {{- if .Values.tfeLicense }}
 TFE_LICENSE: {{ .Values.tfeLicense | b64enc }}
 {{- end }}
