@@ -104,10 +104,46 @@ This deployment is built on official HashiCorp Validated Design modules:
 4. **Ingress Worker** proxies to Egress Worker (multi-hop) or directly to target
 5. **Egress Worker** connects to target host (SSH, RDP, K8s, etc.)
 
+## Quick Start (Using Makefile)
+
+For developers and testers, use the Makefile for streamlined operations:
+
+```bash
+# Set your GCP project (or it defaults to ibm-software-mp-project-test)
+export PROJECT_ID="your-gcp-project-id"
+
+# 1. Build the Packer VM image (one-time setup)
+make packer/build
+
+# 2. Deploy Boundary infrastructure
+make terraform/apply
+
+# 3. Verify deployment health
+make test/health
+
+# 4. Destroy when done
+make terraform/destroy
+```
+
+**Available Makefile targets:**
+
+| Target | Description |
+|--------|-------------|
+| `make packer/build` | Build Boundary VM image with Packer |
+| `make packer/validate` | Validate Packer template |
+| `make terraform/apply` | Deploy Boundary infrastructure |
+| `make terraform/destroy` | Destroy all Boundary resources |
+| `make terraform/plan` | Preview infrastructure changes |
+| `make validate` | Run all validations (Terraform + CFT) |
+| `make test/health` | Check Boundary health endpoint |
+| `make image/list` | List available Boundary images |
+
+---
+
 ## Prerequisites
 
 1. **GCP Project** with billing enabled
-2. **Boundary Enterprise License** (`boundary.hclic` file - included in this package)
+2. **Boundary Enterprise License** (`boundary.hclic` file)
 3. **Terraform** >= 1.5.0
 4. **Packer** >= 1.9.0 (for building VM image)
 5. **gcloud CLI** authenticated
@@ -210,18 +246,85 @@ projects/YOUR_PROJECT_ID/global/images/family/boundary-enterprise
 
 ---
 
+## Module Architecture
+
+This product contains two Terraform configurations with different purposes:
+
+### Root Module (`/boundary/`) - GCP Marketplace Product
+
+The root module is the actual product published to GCP Marketplace.
+
+**Characteristics:**
+- **Assumes secrets already exist** - Requires pre-created Secret Manager secrets
+- **No prerequisites automation** - User must create secrets before deploying
+- **Marketplace-ready** - Has `metadata.yaml`, `metadata.display.yaml` for GCP Marketplace UI
+- **Used via:** `make terraform/apply` with `marketplace_test.tfvars`
+
+**Required inputs (secrets must exist):**
+```hcl
+boundary_license_secret_id           = "existing-secret-id"
+boundary_tls_cert_secret_id          = "existing-secret-id"
+boundary_tls_privkey_secret_id       = "existing-secret-id"
+boundary_database_password_secret_id = "existing-secret-id"
+```
+
+### Test Module (`/boundary/test/`) - Development Wrapper
+
+The test module wraps the root module and automates prerequisite creation.
+
+**Characteristics:**
+- **Auto-creates prerequisites** - Uses `modules/prerequisites` to create secrets and generate TLS certs
+- **Wraps the root module** - Calls `source = "./.."` (the root boundary module)
+- **Self-contained** - One `terraform apply` does everything
+- **Not published** - For internal testing/development only
+
+**Simplified inputs (just point to files):**
+```hcl
+license_file_path = "../boundary.hclic"  # File path, not secret ID
+# TLS certs auto-generated if not provided
+```
+
+### Visual Comparison
+
+```
+Root Module (Marketplace):
+┌─────────────────────────────────────┐
+│  User creates secrets manually      │
+│  (or via Marketplace UI form)       │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  boundary/main.tf                   │
+│  ├── module "controller"            │
+│  ├── module "ingress_worker"        │
+│  └── module "egress_worker"         │
+└─────────────────────────────────────┘
+
+Test Module (Development):
+┌─────────────────────────────────────┐
+│  test/main.tf                       │
+│  ├── module "prerequisites" ◄─────── Creates secrets + TLS certs
+│  └── module "boundary" ◄──────────── Calls root module (./..)
+└─────────────────────────────────────┘
+```
+
+**Why both exist:** GCP Marketplace requires secrets to be pre-existing (customers create them via the Marketplace UI form). The test wrapper automates this for development/testing convenience.
+
+---
+
 ## Step 2 & 3: Deployment Options
 
 There are two deployment options:
 
 | Option | Use Case | Description |
 |--------|----------|-------------|
-| **Option A: Full Deployment** | Testing / Evaluation | Uses `test/` directory - automatically creates all prerequisites (secrets, TLS certs) and deploys Boundary |
-| **Option B: Two-Step Deployment** | Production / Marketplace | Step 2: Create prerequisites, Step 3: Deploy main solution with existing secret IDs |
+| **Option A: Test Module** | Testing / Development | Uses `test/` directory - automatically creates all prerequisites (secrets, TLS certs) and deploys Boundary |
+| **Option B: Root Module** | Production / Marketplace | Create prerequisites first, then deploy main solution with existing secret IDs |
 
 ---
 
-## Option A: Full Deployment (Recommended for Testing)
+## Option A: Test Module Deployment (Recommended for Testing)
 
 This option uses the `test/` directory which automatically creates all prerequisites and deploys the complete solution.
 
@@ -272,7 +375,7 @@ terraform output controller_load_balancer_ip
 
 ---
 
-## Option B: Two-Step Deployment (Production / Marketplace Validation)
+## Option B: Root Module Deployment (Production / Marketplace)
 
 This option separates prerequisite creation from the main deployment. Use this for GCP Marketplace validation or when you want to manage secrets separately.
 
@@ -422,29 +525,40 @@ Configure DNS to point `boundary_fqdn` to the load balancer IP, then access:
 
 ```
 products/boundary/
-├── README.md                 # This file
-├── CLAUDE.md                 # AI assistant guidance
-├── boundary.hclic            # License file (gitignored)
+├── README.md                     # This file
+├── CLAUDE.md                     # AI assistant guidance
+├── Makefile                      # Build and deploy automation
+├── boundary.hclic                # License file (gitignored)
 ├── .gitignore
 │
-├── main.tf                   # Root module
-├── variables.tf              # Input variables
-├── outputs.tf                # Output values
-├── versions.tf               # Provider versions
+├── main.tf                       # Root module
+├── variables.tf                  # Input variables
+├── outputs.tf                    # Output values
+├── versions.tf                   # Provider versions
+├── marketplace_test.tfvars       # Test configuration
 │
-├── metadata.yaml             # GCP Marketplace metadata
-├── metadata.display.yaml     # Marketplace UI config
+├── metadata.yaml                 # GCP Marketplace metadata
+├── metadata.display.yaml         # Marketplace UI config
+│
+├── packer/
+│   ├── boundary.pkr.hcl          # Packer template for VM image
+│   └── scripts/
+│       └── install-boundary.sh   # Boundary installation script
 │
 ├── modules/
-│   ├── controller/           # Controller HVD module
-│   ├── worker/               # Worker HVD module
-│   └── prerequisites/        # Secrets and TLS automation
+│   ├── controller/               # Controller HVD module
+│   ├── worker/                   # Worker HVD module
+│   └── prerequisites/            # Secrets and TLS automation
+│
+├── scripts/
+│   ├── post-deploy-test.sh       # Post-deployment validation
+│   └── validate-deployment.sh    # Deployment health checks
 │
 └── test/
-    ├── main.tf               # Test deployment
+    ├── main.tf                   # Test deployment
     ├── variables.tf
     ├── outputs.tf
-    ├── terraform.tfvars      # Your config (gitignored)
+    ├── terraform.tfvars          # Your config (gitignored)
     └── terraform.tfvars.example
 ```
 
@@ -483,6 +597,51 @@ sudo journalctl -u boundary -f
 | Database connection failed | Cloud SQL not ready | Wait for Cloud SQL provisioning |
 | Health check failing | Controllers initializing | Wait 5-10 minutes after deployment |
 
+## Destroying Resources
+
+### Using Makefile (Recommended)
+
+```bash
+# Destroy all Boundary infrastructure
+make terraform/destroy
+```
+
+### Manual Destruction
+
+```bash
+# From the boundary directory
+terraform destroy -var-file=marketplace_test.tfvars -var="project_id=$PROJECT_ID" -auto-approve
+```
+
+### Cleaning Up After Failed Destroy
+
+If `terraform destroy` fails (e.g., Cloud SQL user deletion error), follow these steps:
+
+```bash
+# 1. Check remaining resources in state
+terraform state list
+
+# 2. Remove problematic resources from state (if already deleted in GCP)
+terraform state rm <resource_address>
+
+# 3. For Cloud SQL user deletion errors, delete the instance directly
+gcloud sql instances delete <instance-name> --project=$PROJECT_ID --quiet
+
+# 4. Clean up state files for fresh start
+rm -f terraform.tfstate terraform.tfstate.backup
+```
+
+### Verify Cleanup
+
+```bash
+# Check no Boundary resources remain
+gcloud compute instances list --project=$PROJECT_ID --filter="name~boundary"
+gcloud sql instances list --project=$PROJECT_ID --filter="name~boundary"
+gcloud compute forwarding-rules list --project=$PROJECT_ID --filter="name~boundary"
+```
+
+---
+
 ## Security Considerations
 
 1. **License Storage**: License stored in GCP Secret Manager, not in code
@@ -491,6 +650,8 @@ sudo journalctl -u boundary -f
 4. **IAM**: Least-privilege service accounts for each component
 5. **Network**: Controllers and workers isolated in appropriate subnets
 6. **Database Password**: Randomly generated and stored in Secret Manager
+
+---
 
 ## Support
 
