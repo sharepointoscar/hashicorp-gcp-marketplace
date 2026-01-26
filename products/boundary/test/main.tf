@@ -80,6 +80,4 @@ module "boundary" {
   # Marketplace
   friendly_name_prefix    = var.friendly_name_prefix
   goog_cm_deployment_name = var.goog_cm_deployment_name
-
-  depends_on = [module.prerequisites]
 }
