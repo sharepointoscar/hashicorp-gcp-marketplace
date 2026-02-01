@@ -164,7 +164,7 @@ function retrieve_certs_from_secret_manager {
   log "[INFO]" "Retrieving Boundary TLS certificates"
   log "[INFO]" "Retrieving value of secret '$SECRET_ID' from Secret Manager."
   CERT_DATA=$(gcloud secrets versions access latest --secret="$SECRET_ID")
-  echo "$CERT_DATA" | base64 -d >$DESTINATION_PATH
+  echo "$CERT_DATA" >$DESTINATION_PATH
   chown $BOUNDARY_USER:$BOUNDARY_GROUP $DESTINATION_PATH
   chmod 640 $DESTINATION_PATH
 }

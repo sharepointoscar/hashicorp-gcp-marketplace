@@ -27,6 +27,9 @@ echo "=== Installing Boundary Enterprise ${BOUNDARY_VERSION} ==="
 echo "Installing prerequisites..."
 export DEBIAN_FRONTEND=noninteractive
 
+# Refresh apt keyrings to fix GPG signature errors on GCP Ubuntu images
+apt-get clean
+rm -rf /var/lib/apt/lists/*
 apt-get update -y
 apt-get install -y \
   jq \

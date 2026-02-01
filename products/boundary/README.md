@@ -118,10 +118,7 @@ make packer/build
 # 2. Deploy Boundary infrastructure
 make terraform/apply
 
-# 3. Verify deployment health
-make test/health
-
-# 4. Destroy when done
+# 3. Destroy when done
 make terraform/destroy
 ```
 
@@ -135,7 +132,6 @@ make terraform/destroy
 | `make terraform/destroy` | Destroy all Boundary resources |
 | `make terraform/plan` | Preview infrastructure changes |
 | `make validate` | Run all validations (Terraform + CFT) |
-| `make test/health` | Check Boundary health endpoint |
 | `make image/list` | List available Boundary images |
 
 ---
@@ -147,7 +143,8 @@ make terraform/destroy
 3. **Terraform** >= 1.5.0
 4. **Packer** >= 1.9.0 (for building VM image)
 5. **gcloud CLI** authenticated
-6. **Required APIs enabled**:
+6. **Private Service Access** configured on your VPC (required for Cloud SQL private IP connectivity)
+7. **Required APIs enabled**:
    ```bash
    gcloud services enable \
      compute.googleapis.com \
@@ -268,15 +265,15 @@ boundary_tls_privkey_secret_id       = "existing-secret-id"
 boundary_database_password_secret_id = "existing-secret-id"
 ```
 
-### Test Module (`/boundary/test/`) - Development Wrapper
+### Deploy Wrapper (`/boundary/deploy/`) - Deployment Wrapper
 
-The test module wraps the root module and automates prerequisite creation.
+The deploy wrapper wraps the root module and automates prerequisite creation.
 
 **Characteristics:**
 - **Auto-creates prerequisites** - Uses `modules/prerequisites` to create secrets and generate TLS certs
 - **Wraps the root module** - Calls `source = "./.."` (the root boundary module)
 - **Self-contained** - One `terraform apply` does everything
-- **Not published** - For internal testing/development only
+- **Included in ZIP** - Recommended entry point for end users
 
 **Simplified inputs (just point to files):**
 ```hcl
@@ -301,15 +298,15 @@ Root Module (Marketplace):
 │  └── module "egress_worker"         │
 └─────────────────────────────────────┘
 
-Test Module (Development):
+Deploy Wrapper:
 ┌─────────────────────────────────────┐
-│  test/main.tf                       │
+│  deploy/main.tf                     │
 │  ├── module "prerequisites" ◄─────── Creates secrets + TLS certs
 │  └── module "boundary" ◄──────────── Calls root module (./..)
 └─────────────────────────────────────┘
 ```
 
-**Why both exist:** GCP Marketplace requires secrets to be pre-existing (customers create them via the Marketplace UI form). The test wrapper automates this for development/testing convenience.
+**Why both exist:** GCP Marketplace requires secrets to be pre-existing (customers create them via the Marketplace UI form). The deploy wrapper automates this for end-user convenience.
 
 ---
 
@@ -319,19 +316,19 @@ There are two deployment options:
 
 | Option | Use Case | Description |
 |--------|----------|-------------|
-| **Option A: Test Module** | Testing / Development | Uses `test/` directory - automatically creates all prerequisites (secrets, TLS certs) and deploys Boundary |
+| **Option A: Deploy Wrapper** | Recommended | Uses `deploy/` directory - automatically creates all prerequisites (secrets, TLS certs) and deploys Boundary |
 | **Option B: Root Module** | Production / Marketplace | Create prerequisites first, then deploy main solution with existing secret IDs |
 
 ---
 
-## Option A: Test Module Deployment (Recommended for Testing)
+## Option A: Deploy Wrapper (Recommended)
 
-This option uses the `test/` directory which automatically creates all prerequisites and deploys the complete solution.
+This option uses the `deploy/` directory which automatically creates all prerequisites and deploys the complete solution.
 
 ### A.1 Configure Variables
 
 ```bash
-cd test
+cd deploy
 
 # Copy the example and edit with your values
 cp terraform.tfvars.example terraform.tfvars
@@ -352,7 +349,7 @@ controller_subnet_name = "default"
 ### A.2 Deploy
 
 ```bash
-cd test
+cd deploy
 
 # Initialize and deploy
 terraform init
@@ -365,6 +362,7 @@ The deployment automatically:
 - Deploys Boundary controllers and workers
 - Creates Cloud SQL PostgreSQL database
 - Sets up Cloud KMS encryption keys
+- Initializes the Boundary database via cloud-init (no manual `boundary database init` needed)
 
 ### A.3 Get Outputs
 
@@ -384,7 +382,7 @@ This option separates prerequisite creation from the main deployment. Use this f
 The `modules/prerequisites` module creates all required Secret Manager secrets.
 
 ```bash
-# From the root boundary directory (not test/)
+# From the root boundary directory (not deploy/)
 cd ..
 
 # Create a temporary prerequisites configuration
@@ -554,8 +552,8 @@ products/boundary/
 │   ├── post-deploy-test.sh       # Post-deployment validation
 │   └── validate-deployment.sh    # Deployment health checks
 │
-└── test/
-    ├── main.tf                   # Test deployment
+└── deploy/
+    ├── main.tf                   # Deployment wrapper
     ├── variables.tf
     ├── outputs.tf
     ├── terraform.tfvars          # Your config (gitignored)
@@ -596,6 +594,9 @@ sudo journalctl -u boundary -f
 | Workers not connecting | Network/firewall | Check firewall rules for port 9201 |
 | Database connection failed | Cloud SQL not ready | Wait for Cloud SQL provisioning |
 | Health check failing | Controllers initializing | Wait 5-10 minutes after deployment |
+| Database URL parse error | Special characters in DB password | Fixed: `urlencode()` is applied to the DB password in `modules/controller/compute.tf` |
+| `Error creating proxy-only subnet` | Org policy or existing subnet | Set `create_proxy_subnet = false` if your VPC already has a proxy-only subnet |
+| Cloud SQL connection refused | No Private Service Access | Configure VPC peering for `servicenetworking.googleapis.com` |
 
 ## Destroying Resources
 

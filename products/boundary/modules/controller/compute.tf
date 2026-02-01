@@ -28,7 +28,7 @@ locals {
     boundary_database_host     = google_sql_database_instance.boundary.private_ip_address
     boundary_database_name     = google_sql_database.boundary.name
     boundary_database_user     = google_sql_user.boundary.name
-    boundary_database_password = google_sql_user.boundary.password #nonsensitive(data.google_secret_manager_secret_version.boundary_database_password_secret_id[0].secret_data) 
+    boundary_database_password = urlencode(google_sql_user.boundary.password)
 
     # KMS settings
     key_ring_project       = var.project_id
@@ -105,9 +105,8 @@ data "google_compute_zones" "up" {
 }
 
 data "google_compute_image" "boundary" {
-  # Parse image name and project from full path: projects/PROJECT/global/images/IMAGE
-  name    = element(split("/", var.boundary_image), length(split("/", var.boundary_image)) - 1)
-  project = element(split("/", var.boundary_image), 1)
+  family  = var.boundary_image_family
+  project = var.boundary_image_project
 }
 
 resource "google_compute_region_instance_group_manager" "boundary" {

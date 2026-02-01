@@ -14,20 +14,6 @@
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
-# Provider Configuration
-#------------------------------------------------------------------------------
-
-provider "google" {
-  project = var.project_id
-  region  = var.region
-}
-
-provider "google-beta" {
-  project = var.project_id
-  region  = var.region
-}
-
-#------------------------------------------------------------------------------
 # Local Values
 #------------------------------------------------------------------------------
 
@@ -37,6 +23,9 @@ locals {
 
   # Worker subnet defaults to controller subnet if not specified
   worker_subnet = var.worker_subnet_name != null ? var.worker_subnet_name : var.controller_subnet_name
+
+  # Image project defaults to the deployment project
+  image_project = var.boundary_image_project != null ? var.boundary_image_project : var.project_id
 
   # Common labels for all resources
   labels = merge(var.common_labels, {
@@ -54,8 +43,9 @@ module "controller" {
   # Project and region
   project_id           = var.project_id
   region               = var.region
-  friendly_name_prefix = local.name_prefix
-  boundary_image       = var.boundary_image
+  friendly_name_prefix   = local.name_prefix
+  boundary_image_family  = var.boundary_image_family
+  boundary_image_project = local.image_project
 
   # Boundary configuration
   boundary_fqdn                            = var.boundary_fqdn
@@ -110,8 +100,9 @@ module "ingress_worker" {
   # Project and region
   project_id           = var.project_id
   region               = var.region
-  friendly_name_prefix = "${local.name_prefix}-ing"
-  boundary_image       = var.boundary_image
+  friendly_name_prefix   = "${local.name_prefix}-ing"
+  boundary_image_family  = var.boundary_image_family
+  boundary_image_project = local.image_project
 
   # Boundary configuration
   boundary_version           = var.boundary_version
@@ -161,8 +152,9 @@ module "egress_worker" {
   # Project and region
   project_id           = var.project_id
   region               = var.region
-  friendly_name_prefix = "${local.name_prefix}-egr"
-  boundary_image       = var.boundary_image
+  friendly_name_prefix   = "${local.name_prefix}-egr"
+  boundary_image_family  = var.boundary_image_family
+  boundary_image_project = local.image_project
 
   # Boundary configuration
   boundary_version           = var.boundary_version

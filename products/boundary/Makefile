@@ -166,20 +166,25 @@ terraform/destroy: terraform/init
 .PHONY: package
 package: $(BUILD_DIR)/$(APP_ID)-$(VERSION).zip
 
-$(BUILD_DIR)/$(APP_ID)-$(VERSION).zip: main.tf variables.tf outputs.tf versions.tf metadata.yaml metadata.display.yaml README.md marketplace_test.tfvars modules/ test/
+$(BUILD_DIR)/$(APP_ID)-$(VERSION).zip: main.tf variables.tf outputs.tf versions.tf metadata.yaml metadata.display.yaml README.md marketplace_test.tfvars modules/ deploy/
 	$(call print_notice,Packaging Terraform module ZIP...)
 	@mkdir -p $(BUILD_DIR)
 	@rm -f $(BUILD_DIR)/$(APP_ID)-$(VERSION).zip
+	@# Stage ZIP_README.md as README.md in temp dir
+	@mkdir -p $(BUILD_DIR)/_zip_tmp
+	@cp ZIP_README.md $(BUILD_DIR)/_zip_tmp/README.md
 	zip -r $(BUILD_DIR)/$(APP_ID)-$(VERSION).zip \
 		main.tf variables.tf outputs.tf versions.tf \
 		metadata.yaml metadata.display.yaml \
-		README.md \
 		marketplace_test.tfvars \
 		modules/ \
-		test/ \
+		deploy/ \
 		packer/ \
 		boundary.hclic \
-		-x "*.terraform*" -x "*.tfstate*" -x ".build/*" -x ".git*" -x "*.DS_Store" -x "test/terraform.tfvars"
+		-x "*.terraform*" -x "*.tfstate*" -x ".build/*" -x ".git*" -x "*.DS_Store" -x "deploy/terraform.tfvars"
+	@# Add the deployment guide as README.md inside the ZIP
+	cd $(BUILD_DIR)/_zip_tmp && zip -g ../$(APP_ID)-$(VERSION).zip README.md
+	@rm -rf $(BUILD_DIR)/_zip_tmp
 	$(call print_success,Package created: $(BUILD_DIR)/$(APP_ID)-$(VERSION).zip)
 	@echo "  Size: $$(du -h $(BUILD_DIR)/$(APP_ID)-$(VERSION).zip | cut -f1)"
 
