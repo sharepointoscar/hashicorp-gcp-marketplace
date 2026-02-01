@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MPL-2.0
 
 #------------------------------------------------------------------------------
-# Boundary Enterprise - Test Deployment
+# Boundary Enterprise - Deployment Wrapper
 #
 # This deploys Boundary Enterprise with all prerequisites automated:
 # - Secret Manager secrets (license, TLS, database password)
@@ -80,4 +80,6 @@ module "boundary" {
   # Marketplace
   friendly_name_prefix    = var.friendly_name_prefix
   goog_cm_deployment_name = var.goog_cm_deployment_name
+
+  depends_on = [module.prerequisites]
 }

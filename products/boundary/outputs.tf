@@ -115,16 +115,24 @@ output "post_deployment_instructions" {
     -----------
     1. Ensure DNS record for '${var.boundary_fqdn}' points to ${module.controller.api_lb_ip_address}
 
-    2. Initialize Boundary (first deployment only):
-       boundary database init -config=/etc/boundary.d/boundary.hcl
+    2. The API should be available immediately after terraform apply completes.
+       The managed instance group health check ensures controllers are healthy
+       before Terraform finishes (~3-5 min for Cloud SQL + ~1 min for controller boot).
 
-    3. Access the Boundary UI:
+    3. Database initialization runs automatically via cloud-init on the first controller boot.
+       Check the controller serial console for initial admin credentials:
+       gcloud compute instances get-serial-port-output <controller-instance> --project=${var.project_id}
+
+    4. Verify the API is responding:
+       curl -sk https://${module.controller.api_lb_ip_address}:9200/v1/scopes
+
+    5. Access the Boundary UI:
        https://${var.boundary_fqdn}:9200
 
-    4. Install the Boundary CLI:
+    6. Install the Boundary CLI:
        https://developer.hashicorp.com/boundary/install
 
-    5. Authenticate:
+    7. Authenticate:
        export BOUNDARY_ADDR="https://${var.boundary_fqdn}:9200"
        boundary authenticate
 
