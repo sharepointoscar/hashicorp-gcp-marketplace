@@ -4,39 +4,36 @@ This monorepo contains Google Cloud Marketplace packages for HashiCorp products.
 
 ## Products
 
-| Product | Type | Status | Description |
-|---------|------|--------|-------------|
-| [TFE (Terraform K8s App)](products/terraform-enterprise-tf/) | Terraform K8s App | Active | Full-stack deployment with Infrastructure Manager |
-| [TFE (Click-to-Deploy)](products/terraform-enterprise/) | Click-to-Deploy | Active | Requires pre-provisioned infrastructure |
-| [Vault](products/vault/) | Click-to-Deploy | Active | Secrets management with Raft storage |
-| [Consul](products/consul/) | Click-to-Deploy | Planned | Service mesh and service discovery |
-| [Nomad](products/nomad/) | Click-to-Deploy | Planned | Workload orchestration |
-| [Terraform Cloud Agent](products/terraform/) | Click-to-Deploy | Planned | Terraform Cloud Agent |
+| Product | GCP Marketplace Type | Status | Description |
+|---------|---------------------|--------|-------------|
+| [Terraform Enterprise](products/terraform-enterprise/) | Kubernetes App (Click-to-Deploy) | Active | Terraform automation with external services (Cloud SQL, Redis, GCS) |
+| [Vault](products/vault/) | Kubernetes App (Click-to-Deploy) | Active | Secrets management with Raft integrated storage |
+| [Consul](products/consul/) | Kubernetes App (Click-to-Deploy) | Active | Service mesh and service discovery |
+| [Terraform Cloud Agent](products/terraform-cloud-agent/) | Kubernetes App (Click-to-Deploy) | Active | Terraform Cloud remote execution agent |
+| [Boundary](products/boundary/) | VM Solution (Terraform Blueprint) | Active | Secure remote access with Cloud SQL, KMS, and worker proxies |
+| Nomad | TBD | Planned | Workload orchestration |
 
-### Deployment Types
+### Product Types
 
-- **Terraform K8s App**: Uses GCP Infrastructure Manager to provision ALL infrastructure (VPC, GKE, Cloud SQL, Redis, GCS) and deploy via Helm. Best for marketplace since it's self-contained.
-- **Click-to-Deploy**: Requires pre-provisioned infrastructure. Customer must set up Cloud SQL, Redis, etc. before deployment.
+- **Kubernetes App (Click-to-Deploy)**: Deployed to GKE via mpdev. Uses `schema.yaml` for marketplace UI inputs and a deployer container image. Validated with `validate-marketplace.sh`.
+- **VM Solution (Terraform Blueprint)**: Deployed to Compute Engine VMs via Terraform. Uses `metadata.yaml` + `metadata.display.yaml` for marketplace UI. Validated with `cft blueprint metadata`.
 
 ## Repository Structure
 
 ```
 hashicorp-gcp-marketplace/
-├── Makefile                       # Root orchestration
-├── shared/                        # Shared infrastructure
-│   ├── Makefile.common            # Common make targets
-│   ├── Makefile.product           # Product build patterns
-│   ├── scripts/                   # Validation and cluster scripts
-│   └── templates/                 # Shared templates
-├── products/                      # Product-specific code
-│   ├── terraform-enterprise-tf/   # TFE Terraform K8s App (Active)
-│   ├── terraform-enterprise/      # TFE Click-to-Deploy (Active)
-│   ├── vault/
-│   ├── consul/
-│   ├── nomad/
-│   └── terraform/
-├── vendor/
-│   └── marketplace-tools/         # Google's marketplace toolkit
+├── shared/                        # Shared build infrastructure
+│   ├── Makefile.common            # Docker flags, print helpers
+│   ├── Makefile.product           # Generic deployer/tester build rules
+│   └── scripts/
+│       ├── lib/common.sh          # Shell functions
+│       └── validate-marketplace.sh # Standard K8s validation script
+├── products/
+│   ├── terraform-enterprise/      # TFE - Kubernetes App
+│   ├── vault/                     # Vault - Kubernetes App
+│   ├── consul/                    # Consul - Kubernetes App
+│   ├── terraform-cloud-agent/     # TFC Agent - Kubernetes App
+│   └── boundary/                  # Boundary - VM Solution (Terraform)
 └── docs/                          # Documentation
 ```
 
@@ -116,12 +113,11 @@ Each product uses independent release tags:
 
 | Product | Tag Pattern | Example |
 |---------|-------------|---------|
-| TFE Terraform K8s App | `tfe-tf-v*` | `tfe-tf-v1.0.0` |
-| TFE Click-to-Deploy | `tfe-v*` | `tfe-v1.0.2` |
+| Terraform Enterprise | `tfe-v*` | `tfe-v1.1.3` |
 | Vault | `vault-v*` | `vault-v1.21.0` |
-| Consul | `consul-v*` | `consul-v1.18.0` |
-| Nomad | `nomad-v*` | `nomad-v1.7.0` |
-| Terraform Cloud Agent | `terraform-v*` | `terraform-v1.0.0` |
+| Consul | `consul-v*` | `consul-v1.22.2` |
+| Terraform Cloud Agent | `tfc-agent-v*` | `tfc-agent-v1.0.0` |
+| Boundary | `boundary-v*` | `boundary-v0.21.0` |
 
 ## License
 
