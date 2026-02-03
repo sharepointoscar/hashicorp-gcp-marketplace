@@ -30,3 +30,6 @@ controller_subnet_name = "default"
 # Proxy subnet for internal load balancer
 # Set to false if proxy-only subnet already exists in VPC/region
 create_proxy_subnet = false
+
+# API load balancer scheme (internal recommended for security)
+api_load_balancing_scheme = "internal"

@@ -109,6 +109,21 @@ variable "deploy_egress_worker" {
 }
 
 #------------------------------------------------------------------------------
+# Load Balancing
+#------------------------------------------------------------------------------
+
+variable "api_load_balancing_scheme" {
+  type        = string
+  description = "Load balancer scheme for the API: 'internal' or 'external'."
+  default     = "internal"
+
+  validation {
+    condition     = contains(["external", "internal"], var.api_load_balancing_scheme)
+    error_message = "Must be 'external' or 'internal'."
+  }
+}
+
+#------------------------------------------------------------------------------
 # Naming
 #------------------------------------------------------------------------------
 

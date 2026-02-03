@@ -153,6 +153,7 @@ Edit `terraform.tfvars` with your values:
 | `boundary_version` | No | `0.21.0+ent` | Boundary Enterprise version |
 | `controller_instance_count` | No | `1` | Number of controller VMs |
 | `controller_machine_type` | No | `n2-standard-4` | Controller VM machine type |
+| `api_load_balancing_scheme` | No | `internal` | API load balancer: `internal` or `external` |
 | `deploy_ingress_worker` | No | `true` | Deploy ingress workers |
 | `deploy_egress_worker` | No | `false` | Deploy egress workers |
 | `ingress_worker_instance_count` | No | `1` | Number of ingress workers |
@@ -355,6 +356,8 @@ If `terraform destroy` fails (e.g., Cloud SQL user deletion error):
 | `Error creating proxy-only subnet` | Org policy or existing subnet | Set `create_proxy_subnet = false` in root module if your VPC already has one |
 | Cloud SQL connection refused | No Private Service Access | Configure VPC peering for `servicenetworking.googleapis.com` (see Prerequisites) |
 | Packer build fails with GPG error | Stale apt cache | The install script handles this automatically |
+| Packer build: `Timeout waiting for SSH` | No firewall rule allowing SSH (port 22) to `packer-build` tagged instances | Create rule: `gcloud compute firewall-rules create allow-packer-ssh --network=default --allow=tcp:22 --source-ranges=0.0.0.0/0 --target-tags=packer-build` |
+| Cloud SQL: `network doesn't have at least 1 private services connection` | VPC missing Private Service Access peering | Create peering: `gcloud compute addresses create google-managed-services-default --global --purpose=VPC_PEERING --prefix-length=16 --network=default` then `gcloud services vpc-peerings connect --service=servicenetworking.googleapis.com --ranges=google-managed-services-default --network=default` |
 
 ---
 

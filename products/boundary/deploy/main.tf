@@ -77,6 +77,9 @@ module "boundary" {
   ingress_worker_instance_count = var.ingress_worker_instance_count
   egress_worker_instance_count  = var.egress_worker_instance_count
 
+  # Load balancing
+  api_load_balancing_scheme = var.api_load_balancing_scheme
+
   # Marketplace
   friendly_name_prefix    = var.friendly_name_prefix
   goog_cm_deployment_name = var.goog_cm_deployment_name
