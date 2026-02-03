@@ -470,7 +470,6 @@ Closes #[issue-number]
 ```
 
 **What to avoid:**
-- Emoji overload and decorative formatting
 - Checkboxes for completed work (you're opening the PR, it's done)
 - "Type of Change" sections (the PR title already conveys this)
 - Verbose descriptions of obvious changes
