@@ -146,7 +146,7 @@ variable "controller_disk_size_gb" {
 variable "api_load_balancing_scheme" {
   type        = string
   description = "Load balancer scheme: 'internal' or 'external'."
-  default     = "external"
+  default     = "internal"
 
   validation {
     condition     = contains(["external", "internal"], var.api_load_balancing_scheme)

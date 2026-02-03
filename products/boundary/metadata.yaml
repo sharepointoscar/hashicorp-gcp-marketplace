@@ -124,7 +124,7 @@ spec:
       - name: api_load_balancing_scheme
         description: "Load balancer scheme: 'internal' or 'external'."
         varType: string
-        defaultValue: "external"
+        defaultValue: "internal"
       # Worker Config
       - name: deploy_ingress_worker
         description: Deploy an ingress worker (public-facing with load balancer).

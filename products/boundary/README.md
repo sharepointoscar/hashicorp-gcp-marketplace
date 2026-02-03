@@ -504,6 +504,7 @@ Configure DNS to point `boundary_fqdn` to the load balancer IP, then access:
 | `boundary_version` | `0.21.0+ent` | Boundary Enterprise version |
 | `controller_instance_count` | `1` | Number of controller instances |
 | `controller_machine_type` | `n2-standard-4` | Controller VM machine type |
+| `api_load_balancing_scheme` | `internal` | API load balancer: `internal` or `external` |
 | `deploy_ingress_worker` | `true` | Deploy ingress worker |
 | `deploy_egress_worker` | `false` | Deploy egress worker |
 | `ingress_worker_instance_count` | `1` | Number of ingress workers |
@@ -597,6 +598,8 @@ sudo journalctl -u boundary -f
 | Database URL parse error | Special characters in DB password | Fixed: `urlencode()` is applied to the DB password in `modules/controller/compute.tf` |
 | `Error creating proxy-only subnet` | Org policy or existing subnet | Set `create_proxy_subnet = false` if your VPC already has a proxy-only subnet |
 | Cloud SQL connection refused | No Private Service Access | Configure VPC peering for `servicenetworking.googleapis.com` |
+| Packer build: `Timeout waiting for SSH` | No firewall rule allowing SSH (port 22) to `packer-build` tagged instances | Create rule: `gcloud compute firewall-rules create allow-packer-ssh --network=default --allow=tcp:22 --source-ranges=0.0.0.0/0 --target-tags=packer-build` |
+| Cloud SQL: `network doesn't have at least 1 private services connection` | VPC missing Private Service Access peering | Create peering: `gcloud compute addresses create google-managed-services-default --global --purpose=VPC_PEERING --prefix-length=16 --network=default` then `gcloud services vpc-peerings connect --service=servicenetworking.googleapis.com --ranges=google-managed-services-default --network=default` |
 
 ## Destroying Resources
 

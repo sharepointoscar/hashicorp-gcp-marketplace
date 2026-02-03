@@ -122,10 +122,10 @@ spec:
           title: API Load Balancer Type
           section: controller
           enumValueLabels:
-            - label: External (Public)
-              value: external
             - label: Internal (Private)
               value: internal
+            - label: External (Public)
+              value: external
         # Worker Section
         deploy_ingress_worker:
           name: deploy_ingress_worker
