@@ -37,31 +37,11 @@ REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 make app/verify
 
 This is a GCP Marketplace deployer for HashiCorp Terraform Enterprise using **Kubernetes App (mpdev)** model with **External Services mode** (Cloud SQL PostgreSQL, Memorystore Redis, GCS bucket).
 
-### Deployment Models
+### Infrastructure Provisioning
 
-TFE supports two infrastructure provisioning approaches:
-
-#### Option A: Config Connector (Auto-Provisioning)
-When `configConnector.enabled=true`, the Helm chart automatically provisions infrastructure using GCP Config Connector:
-- **Cloud SQL PostgreSQL**: `config-connector-sql.yaml`
-- **Memorystore Redis**: `config-connector-redis.yaml`
-- **GCS Bucket**: `config-connector-gcs.yaml`
-
-The TFE deployment includes an **initContainer** (`wait-for-infra`) that:
-1. Waits for Config Connector resources to become ready
-2. Retrieves infrastructure endpoints (SQL IP, Redis host, etc.)
-3. Creates ConfigMap/Secret with TFE environment variables
-
-**Requirements:**
-- GKE cluster with Config Connector addon enabled
-- Service account with Config Connector permissions
-- Private Service Access configured for the VPC
-
-#### Option B: Pre-Provisioned Infrastructure (Terraform)
-When `configConnector.enabled=false`, infrastructure must be pre-provisioned:
+Infrastructure must be pre-provisioned using Terraform before deploying TFE:
 - Location: `terraform/` directory
 - Resources: Cloud SQL, Memorystore Redis, GCS bucket
-- User runs: `terraform apply` before deploying TFE
 
 **Terraform commands:**
 ```bash

@@ -4,34 +4,6 @@ HashiCorp Terraform Enterprise for GCP Marketplace using the **Kubernetes App (m
 
 ## Architecture
 
-TFE supports two infrastructure provisioning modes:
-
-### Option A: Config Connector (Auto-Provisioning) - Recommended
-
-Uses GCP Config Connector to automatically provision infrastructure as part of the Helm deployment. Infrastructure is created declaratively via Kubernetes CRDs.
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  GCP Marketplace Deployer                                       │
-│  └── Helm Chart with Config Connector CRDs                      │
-│      ├── ConfigConnectorContext (namespace config)              │
-│      ├── SQLInstance (Cloud SQL PostgreSQL)                     │
-│      ├── SQLDatabase + SQLUser                                  │
-│      ├── RedisInstance (Memorystore Redis)                      │
-│      ├── StorageBucket (GCS)                                    │
-│      └── TFE Deployment (waits for infrastructure)              │
-├─────────────────────────────────────────────────────────────────┤
-│  Flow:                                                          │
-│  1. Helm renders Config Connector resources                     │
-│  2. CC operator provisions GCP infrastructure (10-15 min)       │
-│  3. InitContainer waits for resources to be Ready               │
-│  4. InitContainer creates ConfigMap/Secret with endpoints       │
-│  5. TFE container starts with infrastructure config             │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Option B: Pre-Provisioned Infrastructure (Terraform)
-
 Infrastructure is provisioned separately using Terraform before deploying TFE.
 
 ```
@@ -52,8 +24,6 @@ Infrastructure is provisioned separately using Terraform before deploying TFE.
 
 ## Prerequisites
 
-### Common Prerequisites
-
 1. **GCP Project** with billing enabled
 2. **GKE Cluster** (1.33+ recommended)
 3. **Docker authenticated** to GCR:
@@ -71,68 +41,7 @@ Infrastructure is provisioned separately using Terraform before deploying TFE.
    docker pull gcr.io/cloud-marketplace-tools/k8s/dev
    ```
 
-### Config Connector Prerequisites (Option A)
-
-When using Config Connector for auto-provisioning:
-
-1. **GKE Cluster with Config Connector addon enabled**:
-   ```bash
-   gcloud container clusters update CLUSTER_NAME \
-     --update-addons ConfigConnector=ENABLED \
-     --region REGION
-   ```
-
-2. **Google Service Account (GSA) for Config Connector**:
-   ```bash
-   PROJECT_ID=your-project-id
-   GSA_NAME=tfe-config-connector
-
-   # Create GSA
-   gcloud iam service-accounts create $GSA_NAME \
-     --project=$PROJECT_ID \
-     --display-name="TFE Config Connector GSA"
-
-   # Grant permissions for Cloud SQL, Redis, GCS
-   for role in cloudsql.admin redis.admin storage.admin monitoring.metricWriter; do
-     gcloud projects add-iam-policy-binding $PROJECT_ID \
-       --member="serviceAccount:$GSA_NAME@$PROJECT_ID.iam.gserviceaccount.com" \
-       --role="roles/$role"
-   done
-   ```
-
-3. **Private Service Access** configured for VPC (required for private Cloud SQL/Redis):
-   ```bash
-   # Reserve IP range for private services
-   gcloud compute addresses create google-managed-services-default \
-     --global --purpose=VPC_PEERING --prefix-length=16 \
-     --network=default --project=$PROJECT_ID
-
-   # Create private connection
-   gcloud services vpc-peerings connect \
-     --service=servicenetworking.googleapis.com \
-     --ranges=google-managed-services-default \
-     --network=default --project=$PROJECT_ID
-   ```
-
 ## Quick Start
-
-### Option A: Config Connector (Auto-Provisioning)
-
-```bash
-cd products/terraform-enterprise
-
-# 1. Build all images
-REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 make app/build
-
-# 2. Run validation (uses shared script)
-REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 \
-  ../../shared/scripts/validate-marketplace.sh terraform-enterprise
-
-# 3. Cleanup stuck namespaces (if needed)
-../../shared/scripts/validate-marketplace.sh terraform-enterprise --cleanup
-```
-
-### Option B: Pre-Provisioned Infrastructure (Terraform)
 
 ```bash
 # 1. Provision infrastructure first
@@ -163,11 +72,7 @@ products/terraform-enterprise/
 │       ├── values.yaml
 │       └── templates/
 │           ├── deployment.yaml           # TFE Deployment with initContainer
-│           ├── config-connector-sql.yaml # Cloud SQL (when CC enabled)
-│           ├── config-connector-redis.yaml # Redis (when CC enabled)
-│           ├── config-connector-gcs.yaml # GCS bucket (when CC enabled)
-│           ├── config-connector-context.yaml # CC namespace config
-│           └── rbac.yaml                 # RBAC for CC resources
+│           └── rbac.yaml                 # RBAC for resources
 ├── deployer/
 │   └── Dockerfile               # Deployer image (deployer_helm base)
 ├── apptest/
@@ -180,7 +85,7 @@ products/terraform-enterprise/
 ├── images/
 │   ├── tfe/Dockerfile           # TFE container image
 │   └── ubbagent/Dockerfile      # Usage-based billing agent
-└── terraform/                   # Infrastructure provisioning (Option B)
+└── terraform/                   # Infrastructure provisioning
     ├── main.tf
     ├── variables.tf
     ├── outputs.tf
@@ -209,9 +114,6 @@ make release           # Clean, build, and tag all versions
 REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 \
   ../../shared/scripts/validate-marketplace.sh terraform-enterprise
 
-# Cleanup stuck namespaces (handles Config Connector resources)
-../../shared/scripts/validate-marketplace.sh terraform-enterprise --cleanup
-
 # Clean GCR images before building
 REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 \
   ../../shared/scripts/validate-marketplace.sh terraform-enterprise --gcr-clean
@@ -225,40 +127,6 @@ REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 \
 | `$REGISTRY/terraform-enterprise/ubbagent:$TAG` | Usage-based billing agent |
 | `$REGISTRY/terraform-enterprise/deployer:$TAG` | mpdev deployer (Helm-based) |
 | `$REGISTRY/terraform-enterprise/tester:$TAG` | mpdev tester for verification |
-
-## Config Connector Integration
-
-When `configConnector.enabled=true`, the Helm chart provisions infrastructure automatically using GCP Config Connector CRDs:
-
-| Resource | CRD | Description |
-|----------|-----|-------------|
-| Cloud SQL | `SQLInstance`, `SQLDatabase`, `SQLUser` | PostgreSQL 16, private IP, auto-resize |
-| Redis | `RedisInstance` | Memorystore Redis 7, AUTH enabled |
-| GCS | `StorageBucket` | Object storage for TFE |
-
-**InitContainer Flow:**
-1. Sets up Workload Identity binding for Config Connector
-2. Waits for SQLInstance, RedisInstance, StorageBucket to be Ready (10-15 min)
-3. Retrieves infrastructure endpoints (IPs, auth strings)
-4. Creates ConfigMap/Secret with TFE environment variables
-5. TFE container starts with infrastructure configuration
-
-**Config Connector Values:**
-```yaml
-configConnector:
-  enabled: true
-  projectId: "your-project-id"
-  googleServiceAccount: "tfe-config-connector@project.iam.gserviceaccount.com"
-  networkName: "default"
-  sql:
-    region: "us-central1"
-    tier: "db-custom-4-16384"
-    diskSize: 50
-  redis:
-    region: "us-central1"
-    tier: "STANDARD_HA"
-    memorySizeGb: 4
-```
 
 ## Schema Properties
 
@@ -280,14 +148,7 @@ User inputs defined in `schema.yaml`:
 | `tlsPrivateKey` | TLS key (base64) |
 | `tlsCACertificate` | CA cert (base64) |
 
-### Config Connector (Option A)
-| Property | Description |
-|----------|-------------|
-| `configConnector.enabled` | Enable auto-provisioning (default: true) |
-| `configConnector.projectId` | GCP project ID |
-| `configConnector.googleServiceAccount` | GSA for Config Connector |
-
-### Pre-provisioned Infrastructure (Option B)
+### Pre-provisioned Infrastructure
 | Property | Description |
 |----------|-------------|
 | `databaseHost` | Cloud SQL PostgreSQL private IP |
@@ -344,39 +205,11 @@ EOF
 ### Clean up test namespaces
 
 ```bash
-# Use the shared script to clean up Config Connector resources and namespaces
+# Use the shared script
 ../../shared/scripts/validate-marketplace.sh terraform-enterprise --cleanup
 
 # Or manually
 kubectl delete ns apptest-*
-```
-
-### Config Connector resources stuck in "Unmanaged" status
-
-This indicates the Config Connector controller isn't managing the namespace:
-
-```bash
-# Check ConfigConnectorContext
-kubectl get configconnectorcontext -n <namespace>
-
-# Check if controller is running
-kubectl get pods -n cnrm-system -l cnrm.cloud.google.com/scoped-namespace=<namespace>
-
-# Verify GSA has correct permissions
-gcloud iam service-accounts get-iam-policy \
-  tfe-config-connector@$PROJECT_ID.iam.gserviceaccount.com
-```
-
-### Config Connector resources failing with 403
-
-The GSA lacks permissions. Grant required roles:
-
-```bash
-for role in cloudsql.admin redis.admin storage.admin; do
-  gcloud projects add-iam-policy-binding $PROJECT_ID \
-    --member="serviceAccount:tfe-config-connector@$PROJECT_ID.iam.gserviceaccount.com" \
-    --role="roles/$role"
-done
 ```
 
 ### Verify image annotations
