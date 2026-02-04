@@ -2,7 +2,7 @@
 # HashiCorp Boundary Enterprise - GCP Marketplace (VM Solution)
 
 APP_ID := boundary-enterprise
-VERSION := 0.21.1
+VERSION := 0.21.2
 BOUNDARY_VERSION := 0.21.0+ent
 
 # GCP Configuration
