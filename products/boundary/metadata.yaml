@@ -193,7 +193,7 @@ spec:
       - name: boundary_image
         description: Full path to VM image for Boundary instances.
         varType: string
-        defaultValue: "projects/ibm-software-mp-project-test/global/images/hashicorp-ubuntu2204-boundary-x86-64-v0210-20260117"
+        defaultValue: "projects/ibm-software-mp-project-test/global/images/hashicorp-ubuntu2204-boundary-x86-64-v0210-20260204"
       - name: friendly_name_prefix
         description: Friendly name prefix for uniquely naming resources (max 12 chars, no 'boundary').
         varType: string

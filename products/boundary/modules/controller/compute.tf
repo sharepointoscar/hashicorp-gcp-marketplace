@@ -65,7 +65,7 @@ resource "google_compute_instance_template" "boundary" {
   can_ip_forward = true
 
   disk {
-    source_image = data.google_compute_image.boundary.self_link
+    source_image = var.boundary_image
     auto_delete  = true
     boot         = true
     disk_size_gb = var.disk_size_gb
@@ -102,11 +102,6 @@ resource "google_compute_instance_template" "boundary" {
 data "google_compute_zones" "up" {
   project = var.project_id
   status  = "UP"
-}
-
-data "google_compute_image" "boundary" {
-  family  = var.boundary_image_family
-  project = var.boundary_image_project
 }
 
 resource "google_compute_region_instance_group_manager" "boundary" {

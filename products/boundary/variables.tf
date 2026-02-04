@@ -278,16 +278,10 @@ variable "common_labels" {
 # GCP Marketplace
 #------------------------------------------------------------------------------
 
-variable "boundary_image_family" {
+variable "boundary_image" {
   type        = string
-  description = "Compute Engine image family for Boundary instances."
-  default     = "boundary-enterprise"
-}
-
-variable "boundary_image_project" {
-  type        = string
-  description = "GCP project containing the Boundary VM image. Defaults to project_id."
-  default     = null
+  description = "Full path to VM image for Boundary instances (e.g. projects/PROJECT/global/images/IMAGE)."
+  default     = "projects/ibm-software-mp-project-test/global/images/hashicorp-ubuntu2204-boundary-x86-64-v0210-20260204"
 }
 
 variable "goog_cm_deployment_name" {

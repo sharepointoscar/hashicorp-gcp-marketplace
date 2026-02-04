@@ -274,15 +274,9 @@ variable "bsr_key_name" {
 #-----------------------------------------------------------------------------------
 # Compute
 #-----------------------------------------------------------------------------------
-variable "boundary_image_family" {
+variable "boundary_image" {
   type        = string
-  description = "Compute Engine image family for Boundary instances."
-  default     = "boundary-enterprise"
-}
-
-variable "boundary_image_project" {
-  type        = string
-  description = "GCP project containing the Boundary VM image."
+  description = "Full path to VM image for Boundary instances (e.g. projects/PROJECT/global/images/IMAGE)."
 }
 
 variable "machine_type" {
