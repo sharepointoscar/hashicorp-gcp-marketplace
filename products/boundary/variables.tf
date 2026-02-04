@@ -36,24 +36,31 @@ variable "boundary_fqdn" {
   description = "Fully qualified domain name for Boundary. Must resolve to the load balancer IP."
 }
 
-variable "boundary_license_secret_id" {
+variable "license_file_path" {
   type        = string
-  description = "Secret Manager secret ID containing the Boundary Enterprise license."
+  description = "Path to Boundary Enterprise license file (.hclic)."
 }
 
-variable "boundary_tls_cert_secret_id" {
+#------------------------------------------------------------------------------
+# TLS Configuration (optional - self-signed if not provided)
+#------------------------------------------------------------------------------
+
+variable "tls_cert_path" {
   type        = string
-  description = "Secret Manager secret ID containing the TLS certificate (base64-encoded PEM)."
+  description = "Path to TLS certificate file. If null, self-signed cert is generated."
+  default     = null
 }
 
-variable "boundary_tls_privkey_secret_id" {
+variable "tls_key_path" {
   type        = string
-  description = "Secret Manager secret ID containing the TLS private key (base64-encoded PEM)."
+  description = "Path to TLS private key file. If null, self-signed key is generated."
+  default     = null
 }
 
-variable "boundary_database_password_secret_id" {
+variable "tls_ca_bundle_path" {
   type        = string
-  description = "Secret Manager secret ID containing the PostgreSQL database password."
+  description = "Path to CA bundle file. Optional."
+  default     = null
 }
 
 #------------------------------------------------------------------------------
@@ -113,12 +120,6 @@ variable "enable_session_recording" {
   type        = bool
   description = "Enable Boundary Session Recording (BSR)."
   default     = false
-}
-
-variable "boundary_tls_ca_bundle_secret_id" {
-  type        = string
-  description = "Secret Manager secret ID for custom CA bundle (base64-encoded PEM). Optional."
-  default     = null
 }
 
 #------------------------------------------------------------------------------

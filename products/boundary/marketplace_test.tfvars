@@ -14,14 +14,8 @@ zone   = "us-central1-f"
 adminEmailAddress = "default-user@example.com"
 
 # Required - Boundary Configuration
-boundary_fqdn = "boundary.example.com"
-
-# Required - Secret Manager IDs (must exist in target project)
-# These are placeholder values - actual secrets must be created before deployment
-boundary_license_secret_id           = "boundary-license"
-boundary_tls_cert_secret_id          = "boundary-tls-cert"
-boundary_tls_privkey_secret_id       = "boundary-tls-key"
-boundary_database_password_secret_id = "boundary-db-password"
+boundary_fqdn     = "boundary.example.com"
+license_file_path = "./boundary.hclic"
 
 # Required - Network Configuration
 vpc_name               = "default"
@@ -29,7 +23,7 @@ controller_subnet_name = "default"
 
 # Proxy subnet for internal load balancer
 # Set to false if proxy-only subnet already exists in VPC/region
-create_proxy_subnet = false
+create_proxy_subnet = true
 
 # API load balancer scheme (internal recommended for security)
 api_load_balancing_scheme = "internal"

@@ -14,6 +14,20 @@
 #------------------------------------------------------------------------------
 
 #------------------------------------------------------------------------------
+# Providers
+#------------------------------------------------------------------------------
+
+provider "google" {
+  project = var.project_id
+  region  = var.region
+}
+
+provider "google-beta" {
+  project = var.project_id
+  region  = var.region
+}
+
+#------------------------------------------------------------------------------
 # Local Values
 #------------------------------------------------------------------------------
 
@@ -34,6 +48,25 @@ locals {
 }
 
 #------------------------------------------------------------------------------
+# Prerequisites - Creates secrets, TLS certs, and database password
+#------------------------------------------------------------------------------
+
+module "prerequisites" {
+  source = "./modules/prerequisites"
+
+  project_id           = var.project_id
+  friendly_name_prefix = local.name_prefix
+  boundary_fqdn        = var.boundary_fqdn
+  license_file_path    = var.license_file_path
+
+  tls_cert_path      = var.tls_cert_path
+  tls_key_path       = var.tls_key_path
+  tls_ca_bundle_path = var.tls_ca_bundle_path
+
+  labels = local.labels
+}
+
+#------------------------------------------------------------------------------
 # Boundary Controller Cluster
 #------------------------------------------------------------------------------
 
@@ -50,11 +83,11 @@ module "controller" {
   # Boundary configuration
   boundary_fqdn                            = var.boundary_fqdn
   boundary_version                         = var.boundary_version
-  boundary_license_secret_id               = var.boundary_license_secret_id
-  boundary_tls_cert_secret_id              = var.boundary_tls_cert_secret_id
-  boundary_tls_privkey_secret_id           = var.boundary_tls_privkey_secret_id
-  boundary_tls_ca_bundle_secret_id         = var.boundary_tls_ca_bundle_secret_id
-  boundary_database_password_secret_version = var.boundary_database_password_secret_id
+  boundary_license_secret_id               = module.prerequisites.license_secret_id
+  boundary_tls_cert_secret_id              = module.prerequisites.tls_cert_secret_id
+  boundary_tls_privkey_secret_id           = module.prerequisites.tls_key_secret_id
+  boundary_tls_ca_bundle_secret_id         = module.prerequisites.ca_bundle_secret_id
+  boundary_database_password_secret_version = module.prerequisites.db_password_secret_id
   enable_session_recording                 = var.enable_session_recording
 
   # Network
@@ -87,6 +120,8 @@ module "controller" {
 
   # Labels
   common_labels = local.labels
+
+  depends_on = [module.prerequisites]
 }
 
 #------------------------------------------------------------------------------

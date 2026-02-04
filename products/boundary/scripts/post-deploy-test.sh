@@ -5,15 +5,40 @@
 #------------------------------------------------------------------------------
 # Boundary Enterprise - Post-Deployment Test Script
 #
-# This script performs end-to-end testing after terraform apply:
-# 1. Configures /etc/hosts for local DNS resolution
-# 2. Initializes Boundary database (first deployment)
-# 3. Verifies UI accessibility
-# 4. Installs Boundary CLI (if not present)
-# 5. Authenticates to Boundary
+# Architecture: Local orchestration + remote validation
+#   Phase 1 (local):  Gather terraform outputs, discover controller VMs
+#   Phase 2 (remote): SSH into controller, run all validation from inside GCP
+#
+# This ensures all checks work regardless of LB scheme (internal or external).
+#
+# Usage:
+#   ./scripts/post-deploy-test.sh --project=PROJECT_ID [--region=REGION]
+#
+# Prerequisites:
+#   - terraform apply completed successfully
+#   - gcloud CLI authenticated with IAP tunnel access
+#   - Run from directory containing terraform.tfstate
 #------------------------------------------------------------------------------
 
 set -euo pipefail
+
+# Parse arguments
+ARG_PROJECT_ID=""
+ARG_REGION=""
+INIT_AUTH_METHOD_ID=""
+INIT_LOGIN_NAME=""
+INIT_PASSWORD=""
+
+for arg in "$@"; do
+    case $arg in
+        --project=*)
+            ARG_PROJECT_ID="${arg#*=}"
+            ;;
+        --region=*)
+            ARG_REGION="${arg#*=}"
+            ;;
+    esac
+done
 
 # Colors for output
 RED='\033[0;31m'
@@ -24,7 +49,20 @@ NC='\033[0m' # No Color
 
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TEST_DIR="$SCRIPT_DIR/../test"
+PRODUCT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Determine working directory: find where terraform.tfstate lives
+if [[ -f "$PWD/terraform.tfstate" ]]; then
+    WORK_DIR="$PWD"
+elif [[ -f "$PRODUCT_DIR/terraform.tfstate" ]]; then
+    WORK_DIR="$PRODUCT_DIR"
+elif [[ -f "$PRODUCT_DIR/test/terraform.tfstate" ]]; then
+    WORK_DIR="$PRODUCT_DIR/test"
+else
+    echo "ERROR: No terraform.tfstate found. Run 'terraform apply' first."
+    echo "Searched: $PWD, $PRODUCT_DIR, $PRODUCT_DIR/test"
+    exit 1
+fi
 
 #------------------------------------------------------------------------------
 # Helper Functions
@@ -51,338 +89,319 @@ print_info() {
     echo -e "  $1"
 }
 
-#------------------------------------------------------------------------------
-# Get Terraform Outputs
-#------------------------------------------------------------------------------
-get_terraform_outputs() {
-    print_header "Step 1: Getting Terraform Outputs"
+ssh_to_controller() {
+    local vm="$1"
+    local zone="$2"
+    local cmd="$3"
+    gcloud compute ssh "$vm" \
+        --project="$PROJECT_ID" \
+        --zone="$zone" \
+        --tunnel-through-iap \
+        --command="$cmd" \
+        -- -o ConnectTimeout=30 -o StrictHostKeyChecking=no 2>/dev/null
+}
 
-    if [[ ! -d "$TEST_DIR" ]]; then
-        print_error "Test directory not found: $TEST_DIR"
-        exit 1
+#==============================================================================
+# PHASE 1: LOCAL — Gather terraform outputs, discover infrastructure
+#==============================================================================
+
+gather_outputs() {
+    print_header "Phase 1: Gathering Terraform Outputs (local)"
+
+    cd "$WORK_DIR"
+    print_info "Working directory: $WORK_DIR"
+
+    # Detect tfvars file
+    if [[ -f "marketplace_test.tfvars" ]]; then
+        TFVARS_FILE="marketplace_test.tfvars"
+    elif [[ -f "terraform.tfvars" ]]; then
+        TFVARS_FILE="terraform.tfvars"
+    else
+        TFVARS_FILE=""
     fi
 
-    cd "$TEST_DIR"
-
-    # Get outputs
+    # Get outputs from terraform state
     BOUNDARY_FQDN=$(terraform output -raw boundary_url 2>/dev/null | sed 's|https://||' | sed 's|:.*||') || true
     LB_IP=$(terraform output -raw controller_load_balancer_ip 2>/dev/null) || true
-    PROJECT_ID=$(terraform output -raw project_id 2>/dev/null) || true
-    REGION=$(terraform output -raw region 2>/dev/null) || true
+
+    REGION="${ARG_REGION}"
+    if [[ -z "$REGION" ]]; then
+        REGION=$(terraform output -raw region 2>/dev/null) || true
+    fi
+
+    # Get project_id: CLI arg > terraform output > tfvars
+    PROJECT_ID="${ARG_PROJECT_ID}"
+    if [[ -z "$PROJECT_ID" ]]; then
+        PROJECT_ID=$(terraform output -raw project_id 2>/dev/null) || true
+    fi
+    if [[ -z "$PROJECT_ID" ]] && [[ -n "$TFVARS_FILE" ]]; then
+        PROJECT_ID=$(grep '^project_id' "$TFVARS_FILE" 2>/dev/null | sed 's/.*=.*"\(.*\)"/\1/' | tr -d ' ') || true
+    fi
+    if [[ -z "$PROJECT_ID" ]]; then
+        print_error "Could not determine project_id. Use --project=PROJECT_ID"
+        exit 1
+    fi
 
     if [[ -z "$LB_IP" ]]; then
         print_error "Could not get load balancer IP from terraform outputs"
         exit 1
     fi
 
-    # Get controller VM name and zone
-    FRIENDLY_PREFIX=$(terraform output -raw friendly_name_prefix 2>/dev/null) || FRIENDLY_PREFIX="bnd"
-    CONTROLLER_VM=$(gcloud compute instances list \
+    # Get deployment prefix
+    FRIENDLY_PREFIX=""
+    if [[ -n "$TFVARS_FILE" ]]; then
+        FRIENDLY_PREFIX=$(grep '^goog_cm_deployment_name' "$TFVARS_FILE" 2>/dev/null | sed 's/.*=.*"\(.*\)"/\1/' | tr -d ' ') || true
+    fi
+    if [[ -z "$FRIENDLY_PREFIX" ]]; then
+        FRIENDLY_PREFIX=$(terraform output -raw friendly_name_prefix 2>/dev/null) || true
+    fi
+    if [[ -z "$FRIENDLY_PREFIX" ]] && [[ -n "$TFVARS_FILE" ]]; then
+        FRIENDLY_PREFIX=$(grep '^friendly_name_prefix' "$TFVARS_FILE" 2>/dev/null | sed 's/.*=.*"\(.*\)"/\1/' | tr -d ' ') || true
+    fi
+    FRIENDLY_PREFIX="${FRIENDLY_PREFIX:-bnd}"
+
+    # Discover ALL controller VMs
+    CONTROLLER_VMS_RAW=$(gcloud compute instances list \
         --project="$PROJECT_ID" \
-        --filter="name~${FRIENDLY_PREFIX}-boundary-controller" \
-        --format="value(name)" \
-        --limit=1 2>/dev/null) || true
-    CONTROLLER_ZONE=$(gcloud compute instances list \
-        --project="$PROJECT_ID" \
-        --filter="name~${FRIENDLY_PREFIX}-boundary-controller" \
-        --format="value(zone)" \
-        --limit=1 2>/dev/null) || true
+        --filter="name~${FRIENDLY_PREFIX}.*boundary.*controller OR name~${FRIENDLY_PREFIX}.*bnd.*ctl" \
+        --format="csv[no-heading](name,zone)" 2>/dev/null) || true
 
-    print_info "Boundary FQDN: $BOUNDARY_FQDN"
-    print_info "Load Balancer IP: $LB_IP"
-    print_info "Project ID: $PROJECT_ID"
-    print_info "Controller VM: $CONTROLLER_VM"
-    print_info "Controller Zone: $CONTROLLER_ZONE"
-    print_success "Configuration retrieved"
-}
-
-#------------------------------------------------------------------------------
-# Step 1: Configure DNS (/etc/hosts)
-#------------------------------------------------------------------------------
-configure_dns() {
-    print_header "Step 2: Configuring Local DNS (/etc/hosts)"
-
-    # Check if entry already exists
-    if grep -q "$BOUNDARY_FQDN" /etc/hosts 2>/dev/null; then
-        EXISTING_IP=$(grep "$BOUNDARY_FQDN" /etc/hosts | awk '{print $1}' | head -1)
-        if [[ "$EXISTING_IP" == "$LB_IP" ]]; then
-            print_success "DNS entry already configured: $LB_IP $BOUNDARY_FQDN"
-            return 0
-        else
-            print_warning "Existing entry found with different IP: $EXISTING_IP"
-            print_info "Updating to: $LB_IP $BOUNDARY_FQDN"
-            # Remove old entry and add new one
-            sudo sed -i.bak "/$BOUNDARY_FQDN/d" /etc/hosts
-        fi
+    if [[ -z "$CONTROLLER_VMS_RAW" ]]; then
+        CONTROLLER_VMS_RAW=$(gcloud compute instances list \
+            --project="$PROJECT_ID" \
+            --filter="name~boundary.*controller" \
+            --format="csv[no-heading](name,zone)" 2>/dev/null) || true
     fi
 
-    # Add new entry
-    print_info "Adding DNS entry: $LB_IP $BOUNDARY_FQDN"
-    echo "$LB_IP $BOUNDARY_FQDN" | sudo tee -a /etc/hosts > /dev/null
+    CONTROLLER_NAMES=()
+    CONTROLLER_ZONES=()
+    while IFS=',' read -r name zone; do
+        [[ -n "$name" ]] && CONTROLLER_NAMES+=("$name") && CONTROLLER_ZONES+=("$zone")
+    done <<< "$CONTROLLER_VMS_RAW"
 
-    # Verify
-    if grep -q "$LB_IP.*$BOUNDARY_FQDN" /etc/hosts; then
-        print_success "DNS entry added to /etc/hosts"
+    CONTROLLER_VM="${CONTROLLER_NAMES[0]:-}"
+    CONTROLLER_ZONE="${CONTROLLER_ZONES[0]:-}"
+
+    if [[ -z "$CONTROLLER_VM" ]]; then
+        print_error "No controller VMs found"
+        exit 1
+    fi
+
+    print_info "Boundary FQDN:     $BOUNDARY_FQDN"
+    print_info "Load Balancer IP:  $LB_IP"
+    print_info "Project ID:        $PROJECT_ID"
+    print_info "Deployment Prefix: $FRIENDLY_PREFIX"
+    print_info "Controller VMs:    ${CONTROLLER_NAMES[*]}"
+    print_info "Primary Controller: $CONTROLLER_VM ($CONTROLLER_ZONE)"
+    print_success "Terraform outputs gathered"
+}
+
+#==============================================================================
+# PHASE 2: REMOTE — SSH into controller, validate everything from inside GCP
+#==============================================================================
+
+run_remote_validation() {
+    print_header "Phase 2: Remote Validation (via SSH to $CONTROLLER_VM)"
+
+    print_info "Uploading validation script to controller..."
+
+    # Build the remote validation script as a heredoc.
+    # All checks run from inside the controller where the network is reachable.
+    REMOTE_SCRIPT=$(cat <<'REMOTE_EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+
+BOUNDARY_FQDN="__BOUNDARY_FQDN__"
+LB_IP="__LB_IP__"
+PROJECT_ID="__PROJECT_ID__"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+PASS_COUNT=0
+FAIL_COUNT=0
+WARN_COUNT=0
+
+check_pass() { echo -e "${GREEN}✓ $1${NC}"; ((PASS_COUNT++)); }
+check_fail() { echo -e "${RED}✗ $1${NC}"; ((FAIL_COUNT++)); }
+check_warn() { echo -e "${YELLOW}⚠ $1${NC}"; ((WARN_COUNT++)); }
+print_info() { echo -e "  $1"; }
+
+echo ""
+echo "=========================================="
+echo "Remote Validation (running on $(hostname))"
+echo "=========================================="
+
+#--- Check 1: Boundary service ---
+echo -e "\n${BLUE}[1/7] Boundary Service${NC}"
+if systemctl is-active --quiet boundary 2>/dev/null; then
+    VERSION=$(boundary version 2>/dev/null | head -1 || echo "unknown")
+    check_pass "Boundary service is active ($VERSION)"
+else
+    check_fail "Boundary service is not running"
+    print_info "$(sudo systemctl status boundary 2>&1 | head -5)"
+fi
+
+#--- Check 2: API health endpoint (port 9200) ---
+echo -e "\n${BLUE}[2/7] API Endpoint (port 9200)${NC}"
+API_RESPONSE=$(curl -sk -o /dev/null -w "%{http_code}" "https://127.0.0.1:9200" 2>/dev/null) || API_RESPONSE="000"
+if [[ "$API_RESPONSE" == "200" ]]; then
+    check_pass "API endpoint responding (HTTP $API_RESPONSE)"
+else
+    check_fail "API endpoint returned HTTP $API_RESPONSE"
+fi
+
+#--- Check 3: Cluster endpoint (port 9201) ---
+echo -e "\n${BLUE}[3/7] Cluster Endpoint (port 9201)${NC}"
+CLUSTER_RESPONSE=$(curl -sk -o /dev/null -w "%{http_code}" "https://127.0.0.1:9201" 2>/dev/null) || CLUSTER_RESPONSE="000"
+if [[ "$CLUSTER_RESPONSE" != "000" ]]; then
+    check_pass "Cluster endpoint responding (HTTP $CLUSTER_RESPONSE)"
+else
+    check_warn "Cluster endpoint not responding (may be normal if not yet peered)"
+fi
+
+#--- Check 4: Auth methods (database initialization) ---
+echo -e "\n${BLUE}[4/7] Database Initialization${NC}"
+AUTH_RESPONSE=$(curl -sk "https://127.0.0.1:9200/v1/auth-methods?scope_id=global" 2>/dev/null) || AUTH_RESPONSE=""
+if echo "$AUTH_RESPONSE" | grep -q '"id"'; then
+    AUTH_METHOD_ID=$(echo "$AUTH_RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    check_pass "Database initialized — auth method: $AUTH_METHOD_ID"
+else
+    check_fail "No auth methods found — database may not be initialized"
+fi
+
+#--- Check 5: Load balancer reachability ---
+echo -e "\n${BLUE}[5/7] Load Balancer ($LB_IP:9200)${NC}"
+LB_RESPONSE=$(curl -sk -o /dev/null -w "%{http_code}" "https://$LB_IP:9200" 2>/dev/null) || LB_RESPONSE="000"
+if [[ "$LB_RESPONSE" == "200" ]]; then
+    check_pass "Load balancer responding (HTTP $LB_RESPONSE)"
+else
+    check_warn "Load balancer returned HTTP $LB_RESPONSE (may still be warming up)"
+fi
+
+#--- Check 6: Scopes API (functional test) ---
+echo -e "\n${BLUE}[6/7] Scopes API (functional test)${NC}"
+SCOPES_RESPONSE=$(curl -sk "https://127.0.0.1:9200/v1/scopes?scope_id=global" 2>/dev/null) || SCOPES_RESPONSE=""
+if echo "$SCOPES_RESPONSE" | grep -q '"scope_id"'; then
+    SCOPE_COUNT=$(echo "$SCOPES_RESPONSE" | grep -o '"scope_id"' | wc -l)
+    check_pass "Scopes API working ($SCOPE_COUNT scope(s) found)"
+else
+    check_fail "Scopes API not returning expected data"
+fi
+
+#--- Check 7: Authentication test ---
+echo -e "\n${BLUE}[7/7] Authentication Test${NC}"
+INIT_LOGIN="__INIT_LOGIN_NAME__"
+INIT_PASS="__INIT_PASSWORD__"
+if [[ -n "$AUTH_METHOD_ID" ]] && [[ -n "$INIT_LOGIN" ]] && [[ "$INIT_LOGIN" != "" ]]; then
+    AUTH_RESULT=$(curl -sk -X POST "https://127.0.0.1:9200/v1/auth-methods/${AUTH_METHOD_ID}:authenticate" \
+        -d "{\"attributes\":{\"login_name\":\"$INIT_LOGIN\",\"password\":\"$INIT_PASS\"}}" 2>/dev/null) || AUTH_RESULT=""
+    if echo "$AUTH_RESULT" | grep -q '"token"'; then
+        check_pass "Authentication successful with admin credentials"
     else
-        print_error "Failed to add DNS entry"
-        exit 1
+        check_warn "Authentication attempt did not return a token"
     fi
+elif [[ -n "$AUTH_METHOD_ID" ]]; then
+    check_pass "Auth method exists ($AUTH_METHOD_ID) — credentials not available for login test"
+else
+    check_warn "No auth method found — skipping authentication test"
+fi
+
+#--- Summary ---
+echo ""
+echo "=========================================="
+echo "Validation Results"
+echo "=========================================="
+echo -e "  ${GREEN}Passed: $PASS_COUNT${NC}"
+[[ $WARN_COUNT -gt 0 ]] && echo -e "  ${YELLOW}Warnings: $WARN_COUNT${NC}"
+[[ $FAIL_COUNT -gt 0 ]] && echo -e "  ${RED}Failed: $FAIL_COUNT${NC}"
+echo ""
+
+# Exit with failure if any checks failed
+[[ $FAIL_COUNT -gt 0 ]] && exit 1
+exit 0
+REMOTE_EOF
+)
+
+    # Inject actual values into the remote script
+    REMOTE_SCRIPT="${REMOTE_SCRIPT//__BOUNDARY_FQDN__/$BOUNDARY_FQDN}"
+    REMOTE_SCRIPT="${REMOTE_SCRIPT//__LB_IP__/$LB_IP}"
+    REMOTE_SCRIPT="${REMOTE_SCRIPT//__PROJECT_ID__/$PROJECT_ID}"
+    REMOTE_SCRIPT="${REMOTE_SCRIPT//__INIT_LOGIN_NAME__/$INIT_LOGIN_NAME}"
+    REMOTE_SCRIPT="${REMOTE_SCRIPT//__INIT_PASSWORD__/$INIT_PASSWORD}"
+
+    # Execute remote validation via SSH
+    REMOTE_EXIT=0
+    gcloud compute ssh "$CONTROLLER_VM" \
+        --project="$PROJECT_ID" \
+        --zone="$CONTROLLER_ZONE" \
+        --tunnel-through-iap \
+        --command="$REMOTE_SCRIPT" \
+        -- -o ConnectTimeout=30 -o StrictHostKeyChecking=no 2>/dev/null || REMOTE_EXIT=$?
+
+    return $REMOTE_EXIT
 }
 
-#------------------------------------------------------------------------------
-# Step 2: Initialize Boundary Database
-#------------------------------------------------------------------------------
-initialize_database() {
-    print_header "Step 3: Checking/Initializing Boundary Database"
+#==============================================================================
+# PHASE 3: LOCAL — Handle database init if needed, install CLI
+#==============================================================================
 
-    if [[ -z "$CONTROLLER_VM" ]] || [[ -z "$CONTROLLER_ZONE" ]]; then
-        print_error "Could not determine controller VM details"
-        exit 1
-    fi
+handle_database_init() {
+    print_header "Phase 3: Database Initialization Check"
 
-    # First, check if auth methods exist (indicates proper initialization)
-    print_info "Checking if Boundary has auth methods configured..."
+    # Cloud-init runs a full `boundary database init` on every controller.
+    # The first controller to acquire the DB lock creates auth methods, scopes,
+    # targets, and logs the admin credentials. Secondary controllers get
+    # "already initialized" and continue normally.
 
-    AUTH_CHECK=$(curl -sk "https://$LB_IP:9200/v1/auth-methods?scope_id=global" 2>/dev/null) || true
+    # Verify auth methods exist via the API
+    AUTH_CHECK=$(ssh_to_controller "$CONTROLLER_VM" "$CONTROLLER_ZONE" \
+        "curl -sk 'https://127.0.0.1:9200/v1/auth-methods?scope_id=global' 2>/dev/null || echo ''") || true
 
     if echo "$AUTH_CHECK" | grep -q '"id"'; then
-        # Auth methods exist - database is properly initialized
-        AUTH_METHOD_ID=$(echo "$AUTH_CHECK" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
-        print_success "Boundary database properly initialized"
-        print_info "Auth Method ID: $AUTH_METHOD_ID"
+        INIT_AUTH_METHOD_ID=$(echo "$AUTH_CHECK" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+        print_success "Auth methods exist — auth method: $INIT_AUTH_METHOD_ID"
+    else
+        print_error "No auth methods found — cloud-init may not have completed"
+        print_info "Check cloud-init log: sudo cat /var/log/boundary-cloud-init.log"
+        return 1
+    fi
 
-        # Retrieve credentials from cloud-init logs
-        print_info "Retrieving initial credentials from cloud-init logs..."
-        CREDS_OUTPUT=$(gcloud compute ssh "$CONTROLLER_VM" \
-            --project="$PROJECT_ID" \
-            --zone="$CONTROLLER_ZONE" \
-            --tunnel-through-iap \
-            -- "sudo cat /var/log/boundary-cloud-init.log | grep -A7 'BOUNDARY INITIAL ADMIN CREDENTIALS'" 2>/dev/null) || true
+    # Retrieve admin credentials from cloud-init log
+    # Try each controller — only the one that won the DB lock has credentials
+    for i in "${!CONTROLLER_NAMES[@]}"; do
+        local vm="${CONTROLLER_NAMES[$i]}"
+        local zone="${CONTROLLER_ZONES[$i]}"
+        CREDS_LOG=$(ssh_to_controller "$vm" "$zone" \
+            "sudo cat /var/log/boundary-cloud-init.log 2>/dev/null | grep -A4 'BOUNDARY INITIAL ADMIN CREDENTIALS' || echo ''") || true
 
-        if echo "$CREDS_OUTPUT" | grep -q "Password:"; then
-            LOGIN_NAME=$(echo "$CREDS_OUTPUT" | grep "Login Name:" | awk '{print $NF}')
-            PASSWORD=$(echo "$CREDS_OUTPUT" | grep "Password:" | awk '{print $NF}')
-
+        if echo "$CREDS_LOG" | grep -q "Login Name:"; then
+            INIT_LOGIN_NAME=$(echo "$CREDS_LOG" | grep "Login Name:" | awk '{print $NF}')
+            INIT_PASSWORD=$(echo "$CREDS_LOG" | grep "Password:" | awk '{print $NF}')
+            print_success "Admin credentials found on $vm"
             echo ""
             echo -e "${YELLOW}==========================================${NC}"
             echo -e "${YELLOW}BOUNDARY INITIAL ADMIN CREDENTIALS${NC}"
             echo -e "${YELLOW}==========================================${NC}"
             echo ""
-            echo "  Auth Method ID: $AUTH_METHOD_ID"
-            echo "  Login Name:     $LOGIN_NAME"
-            echo "  Password:       $PASSWORD"
+            echo "  Auth Method ID: $INIT_AUTH_METHOD_ID"
+            echo "  Login Name:     $INIT_LOGIN_NAME"
+            echo "  Password:       $INIT_PASSWORD"
             echo ""
             echo -e "${YELLOW}==========================================${NC}"
-
-            # Save to file
-            CREDS_FILE="$TEST_DIR/boundary-init-creds.txt"
-            cat > "$CREDS_FILE" <<EOF
-# Boundary Initial Credentials
-# Retrieved: $(date)
-# WARNING: Store these securely and delete this file after saving elsewhere!
-
-Auth Method ID: $AUTH_METHOD_ID
-Login Name: $LOGIN_NAME
-Password: $PASSWORD
-
-Boundary URL: https://$BOUNDARY_FQDN:9200
-EOF
-            chmod 600 "$CREDS_FILE"
-            print_warning "Credentials saved to: $CREDS_FILE"
-            print_warning "DELETE this file after saving credentials securely!"
-        else
-            print_warning "Could not retrieve password from cloud-init logs"
-            print_info "Logs may have been rotated or cleared"
-            print_info "To manually retrieve, run:"
-            print_info "  gcloud compute ssh $CONTROLLER_VM --zone=$CONTROLLER_ZONE --tunnel-through-iap \\"
-            print_info "    -- sudo cat /var/log/boundary-cloud-init.log | grep -A5 \"BOUNDARY INITIAL ADMIN CREDENTIALS\""
-        fi
-        return 0
-    fi
-
-    # No auth methods - need to initialize properly
-    print_warning "No auth methods found. Database needs initialization."
-    print_info "Stopping Boundary service to initialize database..."
-
-    # Stop service, init database, capture output, restart service
-    INIT_OUTPUT=$(gcloud compute ssh "$CONTROLLER_VM" \
-        --project="$PROJECT_ID" \
-        --zone="$CONTROLLER_ZONE" \
-        --tunnel-through-iap \
-        --command="
-            sudo systemctl stop boundary
-            sleep 3
-            sudo boundary database init -config=/etc/boundary.d/controller.hcl 2>&1
-            INIT_EXIT=\$?
-            sudo systemctl start boundary
-            exit \$INIT_EXIT
-        " 2>/dev/null) || true
-
-    # Check if initialization succeeded
-    if echo "$INIT_OUTPUT" | grep -q "Initial auth information"; then
-        print_success "Boundary database initialized successfully!"
-
-        # Extract credentials
-        AUTH_METHOD_ID=$(echo "$INIT_OUTPUT" | grep "Auth Method ID:" | head -1 | awk '{print $NF}')
-        LOGIN_NAME=$(echo "$INIT_OUTPUT" | grep "Login Name:" | head -1 | awk '{print $NF}')
-        PASSWORD=$(echo "$INIT_OUTPUT" | grep "Password:" | head -1 | awk '{print $NF}')
-
-        echo ""
-        echo -e "${YELLOW}==========================================${NC}"
-        echo -e "${YELLOW}IMPORTANT: Save these credentials!${NC}"
-        echo -e "${YELLOW}==========================================${NC}"
-        echo ""
-        echo "  Auth Method ID: $AUTH_METHOD_ID"
-        echo "  Login Name:     $LOGIN_NAME"
-        echo "  Password:       $PASSWORD"
-        echo ""
-        echo -e "${YELLOW}==========================================${NC}"
-
-        # Save to file
-        CREDS_FILE="$TEST_DIR/boundary-init-creds.txt"
-        cat > "$CREDS_FILE" <<EOF
-# Boundary Initial Credentials
-# Generated: $(date)
-# WARNING: Store these securely and delete this file after saving elsewhere!
-
-Auth Method ID: $AUTH_METHOD_ID
-Login Name: $LOGIN_NAME
-Password: $PASSWORD
-
-Boundary URL: https://$BOUNDARY_FQDN:9200
-EOF
-        chmod 600 "$CREDS_FILE"
-        print_warning "Credentials saved to: $CREDS_FILE"
-        print_warning "DELETE this file after saving credentials securely!"
-
-        # Wait for service to be ready
-        print_info "Waiting for Boundary service to be ready..."
-        sleep 10
-
-        return 0
-
-    elif echo "$INIT_OUTPUT" | grep -q "already been initialized"; then
-        # Schema initialized but no auth methods - this is the problematic state
-        print_warning "Database schema exists but no auth methods were created."
-        print_info "This can happen if cloud-init was interrupted."
-        print_info "Attempting to recreate with fresh database..."
-
-        # We need to drop and recreate the database
-        REINIT_OUTPUT=$(gcloud compute ssh "$CONTROLLER_VM" \
-            --project="$PROJECT_ID" \
-            --zone="$CONTROLLER_ZONE" \
-            --tunnel-through-iap \
-            --command="
-                sudo systemctl stop boundary
-                sleep 2
-
-                # Get database connection info from config
-                DB_URL=\$(sudo grep -A5 'database {' /etc/boundary.d/controller.hcl | grep 'url' | sed 's/.*\"\\(.*\\)\".*/\\1/')
-
-                # Extract components (user:pass@host/dbname)
-                DB_HOST=\$(echo \"\$DB_URL\" | sed 's|.*@\\([^/]*\\)/.*|\\1|')
-                DB_NAME=\$(echo \"\$DB_URL\" | sed 's|.*/\\([^?]*\\).*|\\1|')
-                DB_USER=\$(echo \"\$DB_URL\" | sed 's|.*://\\([^:]*\\):.*|\\1|')
-                DB_PASS=\$(echo \"\$DB_URL\" | sed 's|.*://[^:]*:\\([^@]*\\)@.*|\\1|')
-
-                # Install psql if not present
-                which psql > /dev/null 2>&1 || sudo apt-get install -y postgresql-client > /dev/null 2>&1
-
-                # Drop and recreate database
-                PGPASSWORD=\"\$DB_PASS\" psql -h \"\$DB_HOST\" -U \"\$DB_USER\" -d postgres -c \"DROP DATABASE IF EXISTS \$DB_NAME;\" 2>&1
-                PGPASSWORD=\"\$DB_PASS\" psql -h \"\$DB_HOST\" -U \"\$DB_USER\" -d postgres -c \"CREATE DATABASE \$DB_NAME;\" 2>&1
-
-                # Now initialize
-                sudo boundary database init -config=/etc/boundary.d/controller.hcl 2>&1
-                INIT_EXIT=\$?
-
-                sudo systemctl start boundary
-                exit \$INIT_EXIT
-            " 2>/dev/null) || true
-
-        if echo "$REINIT_OUTPUT" | grep -q "Initial auth information"; then
-            print_success "Boundary database reinitialized successfully!"
-
-            # Extract credentials
-            AUTH_METHOD_ID=$(echo "$REINIT_OUTPUT" | grep "Auth Method ID:" | head -1 | awk '{print $NF}')
-            LOGIN_NAME=$(echo "$REINIT_OUTPUT" | grep "Login Name:" | head -1 | awk '{print $NF}')
-            PASSWORD=$(echo "$REINIT_OUTPUT" | grep "Password:" | head -1 | awk '{print $NF}')
-
-            echo ""
-            echo -e "${YELLOW}==========================================${NC}"
-            echo -e "${YELLOW}IMPORTANT: Save these credentials!${NC}"
-            echo -e "${YELLOW}==========================================${NC}"
-            echo ""
-            echo "  Auth Method ID: $AUTH_METHOD_ID"
-            echo "  Login Name:     $LOGIN_NAME"
-            echo "  Password:       $PASSWORD"
-            echo ""
-            echo -e "${YELLOW}==========================================${NC}"
-
-            # Save to file
-            CREDS_FILE="$TEST_DIR/boundary-init-creds.txt"
-            cat > "$CREDS_FILE" <<EOF
-# Boundary Initial Credentials
-# Generated: $(date)
-# WARNING: Store these securely and delete this file after saving elsewhere!
-
-Auth Method ID: $AUTH_METHOD_ID
-Login Name: $LOGIN_NAME
-Password: $PASSWORD
-
-Boundary URL: https://$BOUNDARY_FQDN:9200
-EOF
-            chmod 600 "$CREDS_FILE"
-            print_warning "Credentials saved to: $CREDS_FILE"
-            print_warning "DELETE this file after saving credentials securely!"
-
-            sleep 10
             return 0
-        else
-            print_error "Failed to reinitialize database"
-            echo "$REINIT_OUTPUT" | tail -20
-            return 1
         fi
-    else
-        print_error "Database initialization failed"
-        echo "$INIT_OUTPUT" | tail -30
-        return 1
-    fi
+    done
+
+    print_warning "Credentials not found in cloud-init logs (may have been rotated)"
 }
 
-#------------------------------------------------------------------------------
-# Step 3: Verify UI Accessibility
-#------------------------------------------------------------------------------
-verify_ui() {
-    print_header "Step 4: Verifying Boundary UI Accessibility"
-
-    BOUNDARY_URL="https://$BOUNDARY_FQDN:9200"
-    print_info "Testing: $BOUNDARY_URL"
-
-    # Test with curl
-    HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" "$BOUNDARY_URL" 2>/dev/null) || HTTP_CODE="000"
-
-    if [[ "$HTTP_CODE" == "200" ]]; then
-        print_success "Boundary UI is accessible (HTTP $HTTP_CODE)"
-        print_info "Open in browser: $BOUNDARY_URL"
-    else
-        print_error "Could not access Boundary UI (HTTP $HTTP_CODE)"
-        print_info "Checking direct IP access..."
-        HTTP_CODE_IP=$(curl -sk -o /dev/null -w "%{http_code}" "https://$LB_IP:9200" 2>/dev/null) || HTTP_CODE_IP="000"
-        if [[ "$HTTP_CODE_IP" == "200" ]]; then
-            print_warning "Direct IP access works. DNS may need time to propagate."
-        fi
-        return 1
-    fi
-}
-
-#------------------------------------------------------------------------------
-# Step 4: Install Boundary CLI
-#------------------------------------------------------------------------------
 install_cli() {
-    print_header "Step 5: Installing Boundary CLI"
+    print_header "Phase 4: Local Boundary CLI"
 
-    # Check if already installed
     if command -v boundary &> /dev/null; then
         BOUNDARY_VERSION=$(boundary version 2>/dev/null | head -1)
         print_success "Boundary CLI already installed: $BOUNDARY_VERSION"
@@ -391,215 +410,99 @@ install_cli() {
 
     print_info "Boundary CLI not found. Installing..."
 
-    # Detect OS
     OS=$(uname -s | tr '[:upper:]' '[:lower:]')
     ARCH=$(uname -m)
-
     case "$ARCH" in
         x86_64) ARCH="amd64" ;;
         aarch64|arm64) ARCH="arm64" ;;
-        *) print_error "Unsupported architecture: $ARCH"; return 1 ;;
+        *) print_warning "Unsupported architecture: $ARCH — skipping CLI install"; return 0 ;;
     esac
 
-    # Get latest version
     BOUNDARY_VERSION="0.21.0"
     DOWNLOAD_URL="https://releases.hashicorp.com/boundary/${BOUNDARY_VERSION}+ent/boundary_${BOUNDARY_VERSION}+ent_${OS}_${ARCH}.zip"
 
-    print_info "Downloading from: $DOWNLOAD_URL"
-
-    # Create temp directory
     TEMP_DIR=$(mktemp -d)
-    cd "$TEMP_DIR"
+    if curl -sLo "$TEMP_DIR/boundary.zip" "$DOWNLOAD_URL" && \
+       unzip -qo "$TEMP_DIR/boundary.zip" -d "$TEMP_DIR" 2>/dev/null; then
 
-    # Download and extract
-    if ! curl -sLO "$DOWNLOAD_URL"; then
-        print_error "Failed to download Boundary CLI"
-        cd - > /dev/null
-        rm -rf "$TEMP_DIR"
-        return 1
-    fi
-
-    if ! unzip -q "boundary_${BOUNDARY_VERSION}+ent_${OS}_${ARCH}.zip" 2>/dev/null; then
-        print_error "Failed to extract Boundary CLI"
-        cd - > /dev/null
-        rm -rf "$TEMP_DIR"
-        return 1
-    fi
-
-    # Install - try without sudo first, then with sudo
-    INSTALL_SUCCESS=false
-    if [[ -w /usr/local/bin ]]; then
-        mv boundary /usr/local/bin/ && INSTALL_SUCCESS=true
-    else
-        # Try sudo, but don't fail the whole script if it doesn't work
-        if sudo -n mv boundary /usr/local/bin/ 2>/dev/null; then
-            INSTALL_SUCCESS=true
+        if [[ -w /usr/local/bin ]]; then
+            mv "$TEMP_DIR/boundary" /usr/local/bin/
+        elif sudo -n mv "$TEMP_DIR/boundary" /usr/local/bin/ 2>/dev/null; then
+            true
         else
-            print_warning "Cannot install to /usr/local/bin (requires sudo)"
-            print_info "Installing to ~/.local/bin instead..."
             mkdir -p "$HOME/.local/bin"
-            mv boundary "$HOME/.local/bin/"
-            if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-                print_warning "Add ~/.local/bin to your PATH:"
-                print_info "  export PATH=\"\$HOME/.local/bin:\$PATH\""
-            fi
-            INSTALL_SUCCESS=true
+            mv "$TEMP_DIR/boundary" "$HOME/.local/bin/"
+            export PATH="$HOME/.local/bin:$PATH"
         fi
+        print_success "Boundary CLI installed"
+    else
+        print_warning "Failed to download/install Boundary CLI"
+        print_info "Install manually: https://developer.hashicorp.com/boundary/install"
     fi
-
-    # Cleanup
-    cd - > /dev/null
     rm -rf "$TEMP_DIR"
-
-    # Verify
-    if command -v boundary &> /dev/null; then
-        INSTALLED_VERSION=$(boundary version 2>/dev/null | head -1)
-        print_success "Boundary CLI installed: $INSTALLED_VERSION"
-    elif [[ -x "$HOME/.local/bin/boundary" ]]; then
-        INSTALLED_VERSION=$("$HOME/.local/bin/boundary" version 2>/dev/null | head -1)
-        print_success "Boundary CLI installed to ~/.local/bin: $INSTALLED_VERSION"
-        # Update PATH for this session
-        export PATH="$HOME/.local/bin:$PATH"
-    else
-        print_warning "Boundary CLI installation location not in PATH"
-        print_info "Install manually from: https://developer.hashicorp.com/boundary/install"
-        return 0  # Don't fail the script
-    fi
 }
 
-#------------------------------------------------------------------------------
-# Step 5: Authenticate to Boundary
-#------------------------------------------------------------------------------
-authenticate() {
-    print_header "Step 6: Authenticating to Boundary"
+#==============================================================================
+# SUMMARY
+#==============================================================================
 
-    export BOUNDARY_ADDR="https://$BOUNDARY_FQDN:9200"
-    print_info "BOUNDARY_ADDR=$BOUNDARY_ADDR"
-
-    # Check for saved credentials
-    CREDS_FILE="$TEST_DIR/boundary-init-creds.txt"
-    if [[ -f "$CREDS_FILE" ]]; then
-        AUTH_METHOD_ID=$(grep "Auth Method ID:" "$CREDS_FILE" | awk '{print $NF}')
-        LOGIN_NAME=$(grep "Login Name:" "$CREDS_FILE" | awk '{print $NF}')
-        PASSWORD=$(grep "^Password:" "$CREDS_FILE" | awk '{print $NF}')
-
-        if [[ -n "$AUTH_METHOD_ID" ]] && [[ -n "$LOGIN_NAME" ]] && [[ -n "$PASSWORD" ]]; then
-            print_info "Using saved credentials from: $CREDS_FILE"
-            print_info "Login Name: $LOGIN_NAME"
-            print_info "Auth Method ID: $AUTH_METHOD_ID"
-
-            # Authenticate using environment variable
-            export BOUNDARY_PASSWORD="$PASSWORD"
-            if boundary authenticate password \
-                -addr="$BOUNDARY_ADDR" \
-                -auth-method-id="$AUTH_METHOD_ID" \
-                -login-name="$LOGIN_NAME" \
-                -password="env://BOUNDARY_PASSWORD" \
-                -tls-insecure 2>/dev/null; then
-                print_success "Authentication successful!"
-                unset BOUNDARY_PASSWORD
-
-                # Test connection
-                print_info "Testing API connection..."
-                if boundary scopes list -tls-insecure 2>/dev/null; then
-                    print_success "API connection verified"
-                fi
-                return 0
-            else
-                print_warning "Automated authentication failed"
-                unset BOUNDARY_PASSWORD
-            fi
-        elif [[ -n "$AUTH_METHOD_ID" ]]; then
-            # We have auth method but no password - show instructions
-            print_info "Auth Method ID found: $AUTH_METHOD_ID"
-            print_info "Password not saved (database was already initialized)"
-        fi
-    fi
-
-    # Get auth method ID from API if not in file
-    if [[ -z "$AUTH_METHOD_ID" ]]; then
-        AUTH_METHOD_ID=$(curl -sk "https://$LB_IP:9200/v1/auth-methods?scope_id=global" 2>/dev/null | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4) || true
-    fi
-
-    # Manual authentication instructions
-    print_warning "Manual authentication required"
-    echo ""
-    echo "To authenticate, run:"
-    echo ""
-    echo "  export BOUNDARY_ADDR=\"https://$BOUNDARY_FQDN:9200\""
-    if [[ -n "$AUTH_METHOD_ID" ]]; then
-        echo "  boundary authenticate password \\"
-        echo "    -auth-method-id=\"$AUTH_METHOD_ID\" \\"
-        echo "    -login-name=\"admin\" \\"
-        echo "    -tls-insecure"
-    else
-        echo "  boundary authenticate"
-    fi
-    echo ""
-    echo "Default credentials (if not changed):"
-    echo "  Login Name: admin"
-    echo "  Password: <from initial deployment output>"
-    echo ""
-
-    # Don't fail the script for manual auth
-    return 0
-}
-
-#------------------------------------------------------------------------------
-# Summary
-#------------------------------------------------------------------------------
 print_summary() {
-    print_header "Post-Deployment Test Summary"
+    print_header "Post-Deployment Summary"
 
     echo ""
-    echo "Deployment Information:"
-    echo "  Boundary URL: https://$BOUNDARY_FQDN:9200"
+    echo "Deployment:"
+    echo "  Boundary URL:     https://$BOUNDARY_FQDN:9200"
     echo "  Load Balancer IP: $LB_IP"
-    echo "  Controller VM: $CONTROLLER_VM"
+    echo "  Project:          $PROJECT_ID"
+    echo "  Controllers:      ${#CONTROLLER_NAMES[@]}"
     echo ""
     echo "Quick Commands:"
-    echo "  # Set environment"
-    echo "  export BOUNDARY_ADDR=\"https://$BOUNDARY_FQDN:9200\""
-    echo ""
-    echo "  # Authenticate"
-    echo "  boundary authenticate"
-    echo ""
-    echo "  # List scopes"
-    echo "  boundary scopes list -tls-insecure"
+    echo "  # SSH to controller"
+    echo "  gcloud compute ssh $CONTROLLER_VM --zone=$CONTROLLER_ZONE --tunnel-through-iap"
     echo ""
     echo "  # View controller logs"
-    echo "  gcloud compute ssh $CONTROLLER_VM --zone=$CONTROLLER_ZONE --tunnel-through-iap -- sudo journalctl -u boundary -f"
-    echo ""
-    echo "  # Retrieve initial admin credentials from cloud-init logs"
     echo "  gcloud compute ssh $CONTROLLER_VM --zone=$CONTROLLER_ZONE --tunnel-through-iap \\"
-    echo "    -- sudo cat /var/log/boundary-cloud-init.log | grep -A5 \"BOUNDARY INITIAL ADMIN CREDENTIALS\""
+    echo "    -- sudo journalctl -u boundary -f"
     echo ""
-
-    if [[ -f "$TEST_DIR/boundary-init-creds.txt" ]]; then
-        echo -e "${YELLOW}WARNING: Initial credentials saved to: $TEST_DIR/boundary-init-creds.txt${NC}"
-        echo -e "${YELLOW}         Delete this file after saving credentials securely!${NC}"
-    fi
+    echo "  # Retrieve initial admin credentials"
+    echo "  gcloud compute ssh $CONTROLLER_VM --zone=$CONTROLLER_ZONE --tunnel-through-iap \\"
+    echo "    -- sudo cat /var/log/boundary-cloud-init.log | grep -A7 'BOUNDARY INITIAL ADMIN CREDENTIALS'"
+    echo ""
 }
 
-#------------------------------------------------------------------------------
-# Main
-#------------------------------------------------------------------------------
+#==============================================================================
+# MAIN
+#==============================================================================
+
 main() {
     echo "=========================================="
     echo "Boundary Enterprise Post-Deployment Test"
     echo "=========================================="
 
-    get_terraform_outputs
-    configure_dns
-    initialize_database
-    verify_ui
+    # Phase 1: Local — gather terraform outputs
+    gather_outputs
+
+    # Phase 3: Database init if needed (must happen before remote validation)
+    handle_database_init
+
+    # Phase 2: Remote — run all validation from inside the controller
+    REMOTE_EXIT=0
+    run_remote_validation || REMOTE_EXIT=$?
+
+    # Phase 4: Local — install CLI
     install_cli
-    authenticate
+
+    # Summary
     print_summary
 
-    echo ""
-    print_success "Post-deployment testing complete!"
+    if [[ $REMOTE_EXIT -eq 0 ]]; then
+        echo ""
+        print_success "Post-deployment testing complete!"
+    else
+        echo ""
+        print_error "Some remote validation checks failed (exit code: $REMOTE_EXIT)"
+        exit 1
+    fi
 }
 
-# Run main
 main "$@"

@@ -53,26 +53,26 @@ spec:
           placeholder: boundary.example.com
           tooltip: Fully qualified domain name for Boundary. Must resolve to the load balancer IP.
         # Licensing Section
-        boundary_license_secret_id:
-          name: boundary_license_secret_id
-          title: License Secret ID
+        license_file_path:
+          name: license_file_path
+          title: License File Path
           section: licensing
-          tooltip: Secret Manager secret ID containing the Boundary Enterprise license.
-        boundary_tls_cert_secret_id:
-          name: boundary_tls_cert_secret_id
-          title: TLS Certificate Secret ID
+          tooltip: Path to Boundary Enterprise license file (.hclic).
+        tls_cert_path:
+          name: tls_cert_path
+          title: TLS Certificate Path (Optional)
           section: licensing
-          tooltip: Secret Manager secret ID containing the TLS certificate (base64-encoded PEM).
-        boundary_tls_privkey_secret_id:
-          name: boundary_tls_privkey_secret_id
-          title: TLS Private Key Secret ID
+          tooltip: Path to TLS certificate file. If not provided, a self-signed cert is generated.
+        tls_key_path:
+          name: tls_key_path
+          title: TLS Private Key Path (Optional)
           section: licensing
-          tooltip: Secret Manager secret ID containing the TLS private key (base64-encoded PEM).
-        boundary_tls_ca_bundle_secret_id:
-          name: boundary_tls_ca_bundle_secret_id
-          title: CA Bundle Secret ID (Optional)
+          tooltip: Path to TLS private key file. If not provided, a self-signed key is generated.
+        tls_ca_bundle_path:
+          name: tls_ca_bundle_path
+          title: CA Bundle Path (Optional)
           section: licensing
-          tooltip: Secret Manager secret ID for custom CA bundle (base64-encoded PEM).
+          tooltip: Path to CA bundle file. Optional.
         # Network Section
         vpc_name:
           name: vpc_name

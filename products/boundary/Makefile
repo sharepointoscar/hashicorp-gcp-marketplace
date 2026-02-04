@@ -2,7 +2,7 @@
 # HashiCorp Boundary Enterprise - GCP Marketplace (VM Solution)
 
 APP_ID := boundary-enterprise
-VERSION := 0.21.0
+VERSION := 0.21.1
 BOUNDARY_VERSION := 0.21.0+ent
 
 # GCP Configuration
@@ -79,9 +79,12 @@ image/list:
 
 .PHONY: image/delete
 image/delete:
-	$(call print_notice,Deleting image $(IMAGE_NAME)...)
-	gcloud compute images delete $(IMAGE_NAME) --project=$(PROJECT_ID) --quiet || true
-	$(call print_success,Image deleted)
+	$(call print_notice,Deleting all images in family $(IMAGE_FAMILY)...)
+	@for img in $$(gcloud compute images list --project=$(PROJECT_ID) --filter="family=$(IMAGE_FAMILY)" --format="value(name)" 2>/dev/null); do \
+		echo "  Deleting $$img..."; \
+		gcloud compute images delete $$img --project=$(PROJECT_ID) --quiet || true; \
+	done
+	$(call print_success,Image cleanup complete)
 
 #=============================================================================
 # CFT CLI VALIDATION (Required for VM Solutions)
@@ -166,7 +169,7 @@ terraform/destroy: terraform/init
 .PHONY: package
 package: $(BUILD_DIR)/$(APP_ID)-$(VERSION).zip
 
-$(BUILD_DIR)/$(APP_ID)-$(VERSION).zip: main.tf variables.tf outputs.tf versions.tf metadata.yaml metadata.display.yaml README.md marketplace_test.tfvars modules/ deploy/
+$(BUILD_DIR)/$(APP_ID)-$(VERSION).zip: main.tf variables.tf outputs.tf versions.tf metadata.yaml metadata.display.yaml README.md marketplace_test.tfvars modules/
 	$(call print_notice,Packaging Terraform module ZIP...)
 	@mkdir -p $(BUILD_DIR)
 	@rm -f $(BUILD_DIR)/$(APP_ID)-$(VERSION).zip
@@ -178,10 +181,9 @@ $(BUILD_DIR)/$(APP_ID)-$(VERSION).zip: main.tf variables.tf outputs.tf versions.
 		metadata.yaml metadata.display.yaml \
 		marketplace_test.tfvars \
 		modules/ \
-		deploy/ \
 		packer/ \
 		boundary.hclic \
-		-x "*.terraform*" -x "*.tfstate*" -x ".build/*" -x ".git*" -x "*.DS_Store" -x "deploy/terraform.tfvars"
+		-x "*.terraform*" -x "*.tfstate*" -x ".build/*" -x ".git*" -x "*.DS_Store"
 	@# Add the deployment guide as README.md inside the ZIP
 	cd $(BUILD_DIR)/_zip_tmp && zip -g ../$(APP_ID)-$(VERSION).zip README.md
 	@rm -rf $(BUILD_DIR)/_zip_tmp
@@ -263,7 +265,11 @@ release/full: packer/build validate package upload
 clean::
 	$(call print_notice,Cleaning build artifacts...)
 	rm -rf $(BUILD_DIR)
-	rm -rf .terraform/ *.tfstate* terraform.tfstate.d/
+	rm -rf .terraform/ .terraform.lock.hcl *.tfstate* terraform.tfstate.d/
+
+.PHONY: clean/all
+clean/all: clean image/delete gcs/clean
+	$(call print_success,Full cleanup complete (build artifacts + VM image + GCS package))
 
 .PHONY: gcs/clean
 gcs/clean:
@@ -348,7 +354,9 @@ help:
 	@echo "  make cft/generate     - Generate metadata files"
 	@echo "  make gcs/versioning   - Enable GCS Object Versioning"
 	@echo "  make clean            - Clean local build artifacts"
+	@echo "  make clean/all        - Full cleanup (artifacts + VM image + GCS)"
 	@echo "  make gcs/clean        - Remove package from GCS"
+	@echo "  make image/delete     - Delete the current version VM image"
 	@echo "  make info             - Show configuration & required IAM roles"
 	@echo "  make help             - Show this help"
 	@echo ""

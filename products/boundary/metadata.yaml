@@ -13,7 +13,7 @@ spec:
     source:
       repo: https://github.com/hashicorp/hashicorp-gcp-marketplace.git
       sourceType: git
-    version: 0.21.0
+    version: 0.21.1
     actuationTool:
       flavor: Terraform
       version: ">=1.5.0"
@@ -61,18 +61,19 @@ spec:
         description: Fully qualified domain name for Boundary. Must resolve to the load balancer IP.
         varType: string
         required: true
-      - name: boundary_license_secret_id
-        description: Secret Manager secret ID containing the Boundary Enterprise license.
+      - name: license_file_path
+        description: Path to Boundary Enterprise license file (.hclic).
         varType: string
         required: true
-      - name: boundary_tls_cert_secret_id
-        description: Secret Manager secret ID containing the TLS certificate (base64-encoded PEM).
+      - name: tls_cert_path
+        description: Path to TLS certificate file. If null, self-signed cert is generated.
         varType: string
-        required: true
-      - name: boundary_tls_privkey_secret_id
-        description: Secret Manager secret ID containing the TLS private key (base64-encoded PEM).
+      - name: tls_key_path
+        description: Path to TLS private key file. If null, self-signed key is generated.
         varType: string
-        required: true
+      - name: tls_ca_bundle_path
+        description: Path to CA bundle file. Optional.
+        varType: string
       # Network
       - name: vpc_name
         description: Name of existing VPC network for Boundary deployment.
@@ -105,9 +106,6 @@ spec:
         description: Enable Boundary Session Recording (BSR).
         varType: bool
         defaultValue: false
-      - name: boundary_tls_ca_bundle_secret_id
-        description: Secret Manager secret ID for custom CA bundle (base64-encoded PEM). Optional.
-        varType: string
       # Controller Config
       - name: controller_instance_count
         description: Number of Boundary controller instances.

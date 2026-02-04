@@ -308,10 +308,32 @@ EOF
 function init_boundary_db {
   log "[INFO]" "Initializing Boundary database..."
 
-  # Make sure to initialize the DB before starting the service. This will result in
-  # a database already initialized warning if another controller has done this
-  # already, making it a lazy, best effort initialization
-  /usr/bin/boundary database init -skip-auth-method-creation -skip-host-resources-creation -skip-scopes-creation -skip-target-creation -config $BOUNDARY_CONFIG_PATH || true
+  # Run a full database init (creates schema, auth method, scopes, and targets).
+  # The first controller to acquire the DB lock creates everything including
+  # the initial admin credentials. Secondary controllers will get an "already
+  # initialized" or "Unable to capture a lock" message — the || true handles
+  # that gracefully.
+  #
+  # Boundary sends CloudEvents JSON to stderr and table-format output (including
+  # credentials) to stdout. We capture stdout only; stderr goes to the log file.
+  INIT_OUTPUT=$(/usr/bin/boundary database init -config $BOUNDARY_CONFIG_PATH 2>>"$LOGFILE") || true
+
+  # Log the stdout output for debugging
+  if [[ -n "$INIT_OUTPUT" ]]; then
+    log "[INFO]" "Database init stdout: $INIT_OUTPUT"
+  fi
+
+  # Log credentials if this controller performed the initial setup
+  if echo "$INIT_OUTPUT" | grep -q "Login Name:"; then
+    log "[INFO]" "============================================="
+    log "[INFO]" "BOUNDARY INITIAL ADMIN CREDENTIALS"
+    log "[INFO]" "============================================="
+    echo "$INIT_OUTPUT" | grep -E "Auth Method ID:|Login Name:|Password:" | while read -r line; do
+      log "[INFO]" "$line"
+    done
+    log "[INFO]" "============================================="
+  fi
+
   log "[INFO]" "Done initializing Boundary database."
 }
 
