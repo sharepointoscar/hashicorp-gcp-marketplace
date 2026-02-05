@@ -4,7 +4,7 @@
 metadata:
   id: vault
   version: 1.21.0
-  partnerId: hashicorp
+  partnerId: 0014M00001h317WQAQ
   solutionId: vault
 
 name: HashiCorp Vault Enterprise

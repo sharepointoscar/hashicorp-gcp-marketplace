@@ -12,7 +12,7 @@ USER vault
 
 # Marketplace-required labels
 LABEL com.google.cloud.marketplace.solution_id="vault"
-LABEL com.google.cloud.marketplace.partner_id="hashicorp"
+LABEL com.google.cloud.marketplace.partner_id="0014M00001h317WQAQ"
 # Note: The com.googleapis.cloudmarketplace.product.service.name annotation
 # must be added at build time via --annotation flag, not as a LABEL.
 # The value is specific to your GCP Marketplace Partner Portal configuration.
