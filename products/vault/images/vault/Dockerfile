@@ -1,6 +1,14 @@
 # images/vault/Dockerfile
+# HashiCorp Vault Enterprise - GCP Marketplace
 
-FROM --platform=linux/amd64 hashicorp/vault:1.21
+ARG VAULT_VERSION=1.21.0
+
+FROM --platform=linux/amd64 hashicorp/vault-enterprise:${VAULT_VERSION}-ent
+
+# Patch OS-level CVEs (run as root before switching to vault user)
+USER root
+RUN apk update --no-cache && apk upgrade --no-cache openssl libcrypto3 libssl3
+USER vault
 
 # Marketplace-required labels
 LABEL com.google.cloud.marketplace.solution_id="vault"

@@ -220,18 +220,25 @@ REGISTRY=gcr.io/$PROJECT_ID TAG=1.22.1 \
 
 **Prerequisites:**
 ```bash
-gcloud auth configure-docker  # No special auth required
+# Configure Artifact Registry auth
+gcloud auth configure-docker us-docker.pkg.dev
+
+# Place Enterprise license in product directory
+cp /path/to/vault.hclic products/vault/
 ```
 
 **Validation:**
 ```bash
-REGISTRY=gcr.io/$PROJECT_ID TAG=1.21.0 \
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/vault-marketplace TAG=1.21.0 \
   ./shared/scripts/validate-marketplace.sh vault
 ```
 
 **Key considerations:**
 - Uses Raft integrated storage (no external DB)
+- Vault Enterprise images are on Docker Hub (no registry login needed)
+- License auto-detected from *.hclic file
 - UBB agent pulled directly from Google's registry
+- See `products/vault/CLAUDE.md`
 
 ### Consul (Kubernetes)
 

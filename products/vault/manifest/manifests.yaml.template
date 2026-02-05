@@ -1,6 +1,19 @@
 # manifest/manifests.yaml.template
 
 ---
+# Secret for Vault Enterprise license
+apiVersion: v1
+kind: Secret
+metadata:
+  name: $name-vault-license
+  namespace: $namespace
+  labels:
+    app.kubernetes.io/name: "$name"
+type: Opaque
+stringData:
+  license: "$vaultLicense"
+
+---
 # ConfigMap for Vault configuration
 apiVersion: v1
 kind: ConfigMap
@@ -21,15 +34,14 @@ data:
 
     storage "raft" {
       path = "/vault/data"
-
       retry_join {
-        leader_api_addr = "http://$name-vault-0.$name-vault-internal:8200"
+        leader_api_addr = "http://$name-vault-0.$name-vault-internal.$namespace.svc.cluster.local:8200"
       }
       retry_join {
-        leader_api_addr = "http://$name-vault-1.$name-vault-internal:8200"
+        leader_api_addr = "http://$name-vault-1.$name-vault-internal.$namespace.svc.cluster.local:8200"
       }
       retry_join {
-        leader_api_addr = "http://$name-vault-2.$name-vault-internal:8200"
+        leader_api_addr = "http://$name-vault-2.$name-vault-internal.$namespace.svc.cluster.local:8200"
       }
     }
 
@@ -169,6 +181,11 @@ spec:
               value: "true"
             - name: SKIP_SETCAP
               value: "true"
+            - name: VAULT_LICENSE
+              valueFrom:
+                secretKeyRef:
+                  name: $name-vault-license
+                  key: license
           ports:
             - name: http
               containerPort: 8200
@@ -196,11 +213,11 @@ spec:
             timeoutSeconds: 5
           resources:
             requests:
-              cpu: 500m
-              memory: 256Mi
+              cpu: "$vaultResourcesRequestsCpu"
+              memory: "$vaultResourcesRequestsMemory"
             limits:
-              cpu: 2000m
-              memory: 1Gi
+              cpu: "$vaultResourcesLimitsCpu"
+              memory: "$vaultResourcesLimitsMemory"
           volumeMounts:
             - name: config
               mountPath: /vault/config

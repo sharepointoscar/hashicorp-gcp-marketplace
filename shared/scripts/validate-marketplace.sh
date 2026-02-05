@@ -264,7 +264,13 @@ fi
 : "${TAG:=$PRODUCT_VERSION}"
 
 APP_ID="$PRODUCT_ID"
-DEPLOYER_IMAGE="${REGISTRY}/${APP_ID}/deployer:${TAG}"
+
+# Deployer image path differs between GCR (nested) and Artifact Registry (flat)
+if [[ "$REGISTRY" == *"pkg.dev"* ]]; then
+    DEPLOYER_IMAGE="${REGISTRY}/deployer:${TAG}"
+else
+    DEPLOYER_IMAGE="${REGISTRY}/${APP_ID}/deployer:${TAG}"
+fi
 
 PRODUCT_DISPLAY=$(echo "$PRODUCT" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')
 

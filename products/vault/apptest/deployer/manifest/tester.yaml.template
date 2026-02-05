@@ -10,6 +10,7 @@ metadata:
   annotations:
     marketplace.cloud.google.com/verification: test
 spec:
+  activeDeadlineSeconds: 900
   restartPolicy: Never
   containers:
     - name: tester
@@ -17,7 +18,7 @@ spec:
       env:
         # Target pod-0 explicitly for proper Raft bootstrap/init
         - name: VAULT_ADDR
-          value: "http://$name-vault-0.$name-vault-internal:8200"
+          value: "http://$name-vault-0.$name-vault-internal.$namespace.svc.cluster.local:8200"
         - name: VAULT_SKIP_VERIFY
           value: "true"
       command:
@@ -44,7 +45,7 @@ spec:
               break
             fi
             if [ $i -eq 60 ]; then
-              echo "ERROR: Vault service not available after 10 minutes"
+              echo "ERROR: Vault service not available after 60 attempts"
               exit 1
             fi
             echo "Waiting for Vault service... ($i/60) - exit code: $VAULT_EXIT"
