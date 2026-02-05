@@ -4,7 +4,7 @@ x-google-marketplace:
   publishedVersion: '1.1.3'
   publishedVersionMetadata:
     releaseNote: "Terraform Enterprise for GCP Marketplace - Test Schema"
-  partnerId: hashicorp
+  partnerId: 0014M00001h317WQAQ
   solutionId: terraform-enterprise
 
   clusterConstraints:
@@ -47,7 +47,7 @@ properties:
 
   databaseHost:
     type: string
-    default: "10.100.1.203:5432"
+    default: "10.100.1.3:5432"
 
   databaseName:
     type: string
@@ -59,7 +59,7 @@ properties:
 
   databasePassword:
     type: string
-    default: "3g69EU8wpyTZaKafeTKozXXF"
+    default: "hoZ2iQlPIOfZXllclyqAjbXq"
     x-google-marketplace:
       type: MASKED_FIELD
 
@@ -69,13 +69,13 @@ properties:
 
   redisPassword:
     type: string
-    default: "a3d7c6fd-0d74-4d7e-a0e7-c1c2a5093a65"
+    default: "af175356-1be6-4340-b0b6-56506144db16"
     x-google-marketplace:
       type: MASKED_FIELD
 
   objectStorageBucket:
     type: string
-    default: "tfe-fg7v-objects-ibm-software-mp-project-test"
+    default: "tfe-92z4-objects-ibm-software-mp-project-test"
 
   objectStorageProject:
     type: string

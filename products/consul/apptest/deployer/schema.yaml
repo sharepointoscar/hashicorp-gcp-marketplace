@@ -11,7 +11,7 @@ x-google-marketplace:
     recommended: true
 
   # Partner and product identifiers (must match Partner Portal)
-  partnerId: hashicorp
+  partnerId: 0014M00001h317WQAQ
   solutionId: consul
 
   images:

@@ -10,7 +10,7 @@ metadata:
   labels:
     app.kubernetes.io/name: {{ .Release.Name }}
   annotations:
-    marketplace.cloud.google.com/deploy-info: '{"partner_id": "hashicorp", "product_id": "terraform-enterprise", "partner_name": "HashiCorp"}'
+    marketplace.cloud.google.com/deploy-info: '{"partner_id": "0014M00001h317WQAQ", "product_id": "terraform-enterprise", "partner_name": "HashiCorp"}'
     kubernetes-engine.cloud.google.com/icon: >-
       data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAABGdBTUEAALGPC/xhBQAAAAlwSFlzAAAOwgAADsIBFShKgAAAABl0RVh0U29mdHdhcmUAcGFpbnQubmV0IDQuMC4xMkMEa+wAAAeuSURBVGhD7ZlpbBVVFMf/M+/1U9lKWRQqUBbZEcQNIQIqikbFiDsgKG5oXCOuxBh3EjduqLhGY9wj4oImLuACCiouiBGVKIILVRQVKAhY2t5+c/3PzL33vZlyh9e+aGLiL5m+mXvn3PPfzrnnWPxPwKKG6BDAOU3gwAK1rM1V+cRYQRME8I+A1gmA1hxAu3aAU2d5NYDWpgWnGJ4uQB3gBLBixQfINe5F23btMdhjEI4+egyee/opVJaX4cKLL8Gxx56EVT/8gEWL30SfHn1wcs8jYbeow4+rVuK9F+bA+moTzG9r0eDkWbj7qcdYeJKwwLTxr8GlTwZk+FfFhA4CW/4CBrdJYMSU0w9n7j6J0u2AdJpwnQT/h/6MQHqtI0M/HcAoW6NkI6r6N9/hBLggmZRMgMB0IKVKoABUdMxBbQCJcmQVAGmFCEAg9EqChKxByJAl8AQC2HMHpG8UtN8ANBGEHSBPEqRSIJEGiDmG5EZLkhXIAn4S3qR7BgG1LwFSpFWvThsRaJNEwvJqIoYFakPmZJpkSj7pIOnFgNITlvzA9w5OyLHJhVT8pFqF8LXP3QAwp60DkfxSGBKWxGW5GCSQ7FI7kGYJGtI0hbwQCbVvEICVJzT53BIiA2I4lLVu/wQh6bB/jEfNIbQoQqiNHCQgkyClEsFNSqQl4ckJOIFPUkkiHwmthRLpXl2SG5EJpFsGmSVG6w+M5C9t7xBQUpoM4eBAgkhJJYBWOpNwPBFQY7LigRySeJIExY2mNAZaM0MaF+hFSDmkCAIgEkMY/lUE0ipDqkkm0j8FSYj04kCrTmSGVJSgGpJUAJpaijTSMwv/lBCC8M3AEhGG1NJ/VQDzNxHawMEH1IYkFaVkCSKMG4yUYEhpuoDJJLIIwT8lUMkFEATWRPp
 

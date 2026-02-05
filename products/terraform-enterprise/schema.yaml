@@ -7,7 +7,7 @@ x-google-marketplace:
     releaseTypes:
     - Feature
     recommended: true
-  partnerId: hashicorp
+  partnerId: 0014M00001h317WQAQ
   solutionId: terraform-enterprise
 
   clusterConstraints:
