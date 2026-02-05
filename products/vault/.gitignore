@@ -1,0 +1,5 @@
+# License files (contain sensitive data)
+*.hclic
+
+# Build artifacts
+.build/

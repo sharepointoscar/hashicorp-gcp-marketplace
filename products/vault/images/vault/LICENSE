@@ -1,4 +1,5 @@
-HashiCorp Vault is licensed under the Business Source License 1.1 (BSL).
-See https://github.com/hashicorp/vault/blob/main/LICENSE for full details.
+HashiCorp Vault Enterprise requires a valid Enterprise license.
+See https://www.hashicorp.com/products/vault/pricing for licensing details.
 
-This GCP Marketplace package is provided for deployment convenience.
+This GCP Marketplace package deploys Vault Enterprise and requires
+a license provided via the VAULT_LICENSE environment variable.

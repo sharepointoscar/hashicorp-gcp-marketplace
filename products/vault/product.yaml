@@ -1,12 +1,32 @@
-# products/vault/product.yaml
-# Product metadata for HashiCorp Vault
+# Product metadata for HashiCorp Vault Enterprise
+# GCP Marketplace Click-to-Deploy
 
-product:
+metadata:
   id: vault
-  name: HashiCorp Vault
-  version: "1.21.0"
-  partnerId: hashicorp
+  version: 1.21.0
+  partnerId: 0014M00001h317WQAQ
   solutionId: vault
+
+name: HashiCorp Vault Enterprise
+description: |
+  HashiCorp Vault Enterprise secures, stores, and tightly controls access to
+  tokens, passwords, certificates, API keys, and other secrets.
+
+  Enterprise features include namespaces, performance replication, disaster
+  recovery, and HSM auto-unseal.
+
+vendor: HashiCorp
+version: 1.21.0
+
+support:
+  documentation: https://developer.hashicorp.com/vault/docs
+  support: https://support.hashicorp.com
+  github: https://github.com/hashicorp/vault
+
+architecture:
+  deployment: StatefulSet
+  storage: Raft Integrated Storage (PVC)
+  replicas: 3 (default)
 
 marketplace:
   serviceName: services/vault-enterprise--1-16-ent.endpoints.${PROJECT_ID}.cloud.goog
@@ -16,6 +36,8 @@ images:
     path: images/vault
   - name: vault-init
     path: images/vault-init
+  - name: ubbagent
+    path: images/ubbagent
 
 ubb:
   metricName: vault_instance_time

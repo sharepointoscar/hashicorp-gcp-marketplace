@@ -8,18 +8,18 @@ x-google-marketplace:
   publishedVersion: '1.21.0'
   publishedVersionMetadata:
     releaseNote: >-
-      Initial release of HashiCorp Vault on Google Cloud Marketplace.
+      Initial release of HashiCorp Vault Enterprise on Google Cloud Marketplace.
     releaseTypes:
       - Feature
     recommended: true
 
   # Partner and product identifiers (must match Partner Portal)
-  partnerId: hashicorp
+  partnerId: 0014M00001h317WQAQ
   solutionId: vault
 
   # All images must be declared here for security scanning
   images:
-    '':  # Primary image (vault)
+    vault:
       properties:
         imageVault:
           type: FULL
@@ -39,6 +39,9 @@ x-google-marketplace:
         requests:
           cpu: 500m
           memory: 256Mi
+        affinity:
+          simpleNodeAffinity:
+            type: REQUIRE_ONE_NODE_PER_REPLICA
     k8sVersion: ">=1.21.0"
 
 # User-configurable properties (displayed in Marketplace UI)
@@ -110,6 +113,39 @@ properties:
               - apiGroups: [""]
                 resources: ["secrets"]
                 verbs: ["get", "list", "watch", "create", "update", "delete"]
+              - apiGroups: [""]
+                resources: ["pods"]
+                verbs: ["get", "list", "patch", "update"]
+
+  # Vault server resources (user-configurable, conservative defaults for validation)
+  vaultResourcesRequestsCpu:
+    type: string
+    title: Vault CPU Request
+    description: CPU requested for each Vault server pod
+    default: "500m"
+  vaultResourcesRequestsMemory:
+    type: string
+    title: Vault Memory Request
+    description: Memory requested for each Vault server pod
+    default: "256Mi"
+  vaultResourcesLimitsCpu:
+    type: string
+    title: Vault CPU Limit
+    description: CPU limit for each Vault server pod
+    default: "2000m"
+  vaultResourcesLimitsMemory:
+    type: string
+    title: Vault Memory Limit
+    description: Memory limit for each Vault server pod
+    default: "1Gi"
+
+  # Vault Enterprise license (required)
+  vaultLicense:
+    type: string
+    title: Vault Enterprise License
+    description: Vault Enterprise license string (contents of your .hclic file)
+    x-google-marketplace:
+      type: MASKED_FIELD
 
   # Usage reporting secret (required for billing)
   reportingSecret:
@@ -121,4 +157,5 @@ required:
   - name
   - namespace
   - replicas
+  - vaultLicense
   - reportingSecret
