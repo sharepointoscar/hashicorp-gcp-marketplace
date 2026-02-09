@@ -1,13 +1,13 @@
 # HashiCorp Vault Enterprise - GCP Marketplace
 
 This is the GCP Marketplace Click-to-Deploy package for **HashiCorp Vault Enterprise**
-using **Raft integrated storage** on GKE. It is designed to be self-contained: no
+using **file backend storage** on GKE. It is designed to be self-contained: no
 external database is required.
 
 ## Architecture Overview
 
 - **Type**: Kubernetes App (Click-to-Deploy via `mpdev`)
-- **Storage**: Raft integrated storage with PVCs
+- **Storage**: File backend with PVC (single-node)
 - **License**: Vault Enterprise license injected via `VAULT_LICENSE` env var
 - **Images**: Vault Enterprise base image from Docker Hub
 - **Billing**: UBB agent sidecar for GCP Marketplace usage reporting
@@ -16,7 +16,7 @@ external database is required.
 
 | Component | Purpose |
 |-----------|---------|
-| `vault` StatefulSet | Vault Enterprise servers (default 3 replicas) |
+| `vault` StatefulSet | Vault Enterprise server (single replica) |
 | `vault-init` | Init container for pre-flight checks |
 | `ubbagent` | Usage-based billing sidecar |
 | `deployer` | Marketplace deployer image |
@@ -26,8 +26,8 @@ external database is required.
 
 | Service | Type | Purpose |
 |---------|------|---------|
-| `$name-vault-internal` | Headless | Pod DNS + Raft communication |
-| `$name-vault` | ClusterIP | Vault API (active node only) |
+| `$name-vault-internal` | Headless | Pod DNS for StatefulSet |
+| `$name-vault` | ClusterIP | Vault API |
 | `$name-vault-ui` | ClusterIP | Vault UI access |
 
 ## Prerequisites
@@ -99,10 +99,10 @@ REGISTRY=$REGISTRY TAG=$TAG make app/verify
 Vault deploys **sealed**. Initialize and unseal before use.
 
 ```bash
-# Initialize
+# Initialize (single-node deployment)
 kubectl exec -it $name-vault-0 -n $namespace -- vault operator init
 
-# Unseal (run 3 times with different keys)
+# Unseal (run 3 times with different unseal keys)
 kubectl exec -it $name-vault-0 -n $namespace -- vault operator unseal
 ```
 
@@ -114,14 +114,14 @@ kubectl port-forward svc/$name-vault-ui -n $namespace 8200:8200
 
 Open: `https://localhost:8200`
 
-## Resource Defaults (Raft Guide Baseline)
+## Resource Defaults
 
-Vault server pods default to:
+Vault server pod defaults to:
 
-- **Requests**: `cpu: 2000m`, `memory: 8Gi`
-- **Limits**: `cpu: 2000m`, `memory: 16Gi`
+- **Requests**: `cpu: 500m`, `memory: 256Mi`
+- **Limits**: `cpu: 2000m`, `memory: 1Gi`
 
-These align with the Raft deployment guide and can be overridden via schema inputs:
+These can be overridden via schema inputs:
 
 - `vaultResourcesRequestsCpu`
 - `vaultResourcesRequestsMemory`
@@ -132,15 +132,15 @@ These align with the Raft deployment guide and can be overridden via schema inpu
 
 | Property | Default | Description |
 |---------|---------|-------------|
-| `replicas` | 3 | Vault server replicas |
-| `storageClass` | SSD | Storage class for PVCs |
-| `storageSize` | 10Gi | PVC size per replica |
+| `replicas` | 1 | Vault server replicas (single-node) |
+| `storageClass` | SSD | Storage class for PVC |
+| `storageSize` | 10Gi | PVC size |
 | `vaultLicense` | required | Enterprise license (masked) |
 | `reportingSecret` | required | Marketplace billing secret |
-| `vaultResourcesRequestsCpu` | 2000m | CPU request per pod |
-| `vaultResourcesRequestsMemory` | 8Gi | Memory request per pod |
+| `vaultResourcesRequestsCpu` | 500m | CPU request per pod |
+| `vaultResourcesRequestsMemory` | 256Mi | Memory request per pod |
 | `vaultResourcesLimitsCpu` | 2000m | CPU limit per pod |
-| `vaultResourcesLimitsMemory` | 16Gi | Memory limit per pod |
+| `vaultResourcesLimitsMemory` | 1Gi | Memory limit per pod |
 
 ## Troubleshooting
 
@@ -150,7 +150,6 @@ These align with the Raft deployment guide and can be overridden via schema inpu
 |-------|-------|-----|
 | `ImagePullBackOff` | Wrong tag or registry config | Verify `TAG`, run `gcloud auth configure-docker us-docker.pkg.dev` |
 | `license is not valid` | Missing/expired license | Verify `vaultLicense` secret |
-| `Raft timeout` | Pod communication issues | Check headless service and networking |
 | `vault status` exit 2 | Vault is sealed | Unseal with `vault operator unseal` |
 
 ### Verify Enterprise

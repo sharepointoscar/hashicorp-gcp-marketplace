@@ -25,8 +25,8 @@ support:
 
 architecture:
   deployment: StatefulSet
-  storage: Raft Integrated Storage (PVC)
-  replicas: 3 (default)
+  storage: File Backend (PVC)
+  replicas: 1 (single-node)
 
 marketplace:
   serviceName: services/vault-enterprise--1-16-ent.endpoints.${PROJECT_ID}.cloud.goog

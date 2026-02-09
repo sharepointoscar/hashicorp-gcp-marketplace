@@ -27,24 +27,50 @@ REGISTRY=us-docker.pkg.dev/ibm-software-mp-project-test/vault-marketplace TAG=1.
   ../../shared/scripts/validate-marketplace.sh vault --keep-deployment
 ```
 
-**Individual targets (for quick iteration):**
+**Build and Release (ALWAYS use `make release` for final builds):**
 ```bash
-# Build only
-REGISTRY=us-docker.pkg.dev/ibm-software-mp-project-test/vault-marketplace TAG=1.21.0 make app/build
+# Full release - builds all images AND adds major/minor version tags (1, 1.21)
+# GCP Marketplace REQUIRES minor version tags
+make release
 
-# Direct mpdev verify
-REGISTRY=us-docker.pkg.dev/ibm-software-mp-project-test/vault-marketplace TAG=1.21.0 make app/verify
+# Build only (no version tags - use for quick iteration only)
+make app/build
 
-# Direct mpdev install
-REGISTRY=us-docker.pkg.dev/ibm-software-mp-project-test/vault-marketplace TAG=1.21.0 make app/install
+# Add version tags to existing images
+make tags/minor
 ```
 
-**Other targets:**
-- `make clean` - Clean local build artifacts
+**Validation targets:**
+```bash
+# Direct mpdev verify
+make app/verify
+
+# Direct mpdev install
+make app/install
+```
+
+**Cleanup targets:**
+```bash
+# Clean local build artifacts
+make clean
+
+# Full cleanup: namespaces, PVs, AND all Artifact Registry images
+make ns/clean
+```
+
+## IMPORTANT: Always Use `make release`
+
+When building images for GCP Marketplace submission, **ALWAYS use `make release`** instead of `make app/build`. The `release` target:
+1. Cleans previous build artifacts
+2. Builds all images (vault, vault-init, ubbagent, deployer, tester)
+3. Adds major version tag (e.g., `1`)
+4. Adds minor version tag (e.g., `1.21`)
+
+GCP Marketplace requires minor version tags for proper version resolution.
 
 ## Architecture
 
-This is a GCP Marketplace Click-to-Deploy product for HashiCorp Vault Enterprise using **Raft Integrated Storage** (no external infrastructure required).
+This is a GCP Marketplace Click-to-Deploy product for HashiCorp Vault Enterprise using **file backend storage** (single-node, no external infrastructure required).
 
 ### Image Source
 - Base image: `hashicorp/vault-enterprise:1.21-ent` (Docker Hub, publicly available)
@@ -98,9 +124,6 @@ kubectl logs -n <namespace> <pod-name> -c vault | grep "Enterprise"
 # Check Vault status
 kubectl exec -n <namespace> $name-vault-0 -- vault status
 
-# Check Raft peers (after unseal)
-kubectl exec -n <namespace> $name-vault-0 -- vault operator raft list-peers
-
 # Access UI
 kubectl port-forward svc/$name-vault-ui -n <namespace> 8200:8200
 ```
@@ -111,6 +134,5 @@ kubectl port-forward svc/$name-vault-ui -n <namespace> 8200:8200
 |-------|-------|-----|
 | `ImagePullBackOff` | Wrong tag or registry misconfiguration | Verify TAG matches publishedVersion and `gcloud auth configure-docker us-docker.pkg.dev` was run |
 | `license is not valid` | Missing or expired Enterprise license | Check `vaultLicense` secret and license expiry |
-| `Raft timeout` | Pod communication issues | Check headless service and pod connectivity |
 | `No .hclic file found` | License file missing | Place your Vault Enterprise license (*.hclic) in the product directory |
 | `vault status` exit 2 | Vault is sealed (normal after deploy) | Initialize and unseal: `vault operator init` then `vault operator unseal` |

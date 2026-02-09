@@ -229,22 +229,48 @@ clean:
 
 .PHONY: ns/clean
 ns/clean:
-	$(call print_notice,Cleaning up vault test namespaces...)
+	$(call print_notice,Cleaning up vault and apptest namespaces...)
+	@# Step 1: Delete resources in namespaces (non-blocking)
 	@for ns in $$(kubectl get ns -o name 2>/dev/null | grep -E "vault-|apptest-" | cut -d'/' -f2); do \
 		echo "  Cleaning namespace: $$ns"; \
 		kubectl delete application --all -n "$$ns" --wait=false 2>/dev/null || true; \
 		kubectl delete statefulset --all -n "$$ns" --wait=false 2>/dev/null || true; \
 		kubectl delete deploy --all -n "$$ns" --wait=false 2>/dev/null || true; \
 		kubectl delete job --all -n "$$ns" --wait=false 2>/dev/null || true; \
-		kubectl delete pvc --all -n "$$ns" 2>/dev/null || true; \
-		kubectl delete ns "$$ns" 2>/dev/null || true; \
+		kubectl delete pvc --all -n "$$ns" --wait=false 2>/dev/null || true; \
+		kubectl delete ns "$$ns" --wait=false 2>/dev/null || true; \
 	done
-	@echo "  Cleaning orphaned PVs..."
-	@for pv in $$(kubectl get pv -o json 2>/dev/null | python3 -c "import sys,json; [print(i['metadata']['name']) for i in json.load(sys.stdin).get('items',[]) if i.get('status',{}).get('phase')=='Released' or (i.get('spec',{}).get('claimRef',{}).get('namespace','') and any(x in i['spec']['claimRef']['namespace'] for x in ['vault-','apptest-']))]" 2>/dev/null); do \
-		echo "  Deleting orphaned PV: $$pv"; \
-		kubectl delete pv "$$pv" 2>/dev/null || true; \
+	@# Step 2: Force delete PVs related to vault/apptest (remove finalizers first)
+	@echo "  Force cleaning PersistentVolumes..."
+	@for pv in $$(kubectl get pv -o jsonpath='{range .items[?(@.spec.claimRef.namespace)]}{.metadata.name}{" "}{.spec.claimRef.namespace}{"\n"}{end}' 2>/dev/null | grep -E "vault-|apptest-" | awk '{print $$1}'); do \
+		echo "    Removing finalizers from PV: $$pv"; \
+		kubectl patch pv "$$pv" -p '{"metadata":{"finalizers":null}}' --type=merge 2>/dev/null || true; \
+		kubectl delete pv "$$pv" --force --grace-period=0 2>/dev/null || true; \
 	done
-	$(call print_success,Test namespaces and resources cleaned)
+	@# Step 3: Clean Released PVs (orphaned)
+	@for pv in $$(kubectl get pv -o jsonpath='{range .items[?(@.status.phase=="Released")]}{.metadata.name}{"\n"}{end}' 2>/dev/null); do \
+		echo "    Deleting released PV: $$pv"; \
+		kubectl patch pv "$$pv" -p '{"metadata":{"finalizers":null}}' --type=merge 2>/dev/null || true; \
+		kubectl delete pv "$$pv" --force --grace-period=0 2>/dev/null || true; \
+	done
+	@# Step 4: Force delete stuck namespaces (remove finalizers)
+	@for ns in $$(kubectl get ns -o jsonpath='{range .items[?(@.status.phase=="Terminating")]}{.metadata.name}{"\n"}{end}' 2>/dev/null | grep -E "vault-|apptest-"); do \
+		echo "    Force deleting stuck namespace: $$ns"; \
+		kubectl get ns "$$ns" -o json 2>/dev/null | \
+			python3 -c "import sys,json; d=json.load(sys.stdin); d['spec']['finalizers']=[]; print(json.dumps(d))" | \
+			kubectl replace --raw "/api/v1/namespaces/$$ns/finalize" -f - 2>/dev/null || true; \
+	done
+	@# Step 5: Delete ALL packages from vault-marketplace Artifact Registry
+	@echo "  Deleting ALL packages from Artifact Registry..."
+	@for pkg in vault vault-init ubbagent deployer tester; do \
+		echo "    Deleting package: $$pkg"; \
+		gcloud artifacts packages delete "$$pkg" \
+			--repository=vault-marketplace \
+			--location=us \
+			--project=ibm-software-mp-project-test \
+			--quiet 2>/dev/null || true; \
+	done
+	$(call print_success,Test namespaces, PVs, and Artifact Registry packages cleaned)
 
 #=============================================================================
 # INFO

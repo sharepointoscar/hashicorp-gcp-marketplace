@@ -35,13 +35,10 @@ x-google-marketplace:
   # Cluster requirements
   clusterConstraints:
     resources:
-      - replicas: 3
+      - replicas: 1
         requests:
           cpu: 500m
           memory: 256Mi
-        affinity:
-          simpleNodeAffinity:
-            type: REQUIRE_ONE_NODE_PER_REPLICA
     k8sVersion: ">=1.21.0"
 
 # User-configurable properties (displayed in Marketplace UI)
@@ -58,14 +55,14 @@ properties:
     x-google-marketplace:
       type: NAMESPACE
 
-  # Vault server replicas
+  # Vault server replicas (single-node deployment for Marketplace)
   replicas:
     type: integer
     title: Vault Server Replicas
-    description: Number of Vault server pods to deploy
-    default: 3
+    description: Number of Vault server pods to deploy (single-node for Marketplace)
+    default: 1
     minimum: 1
-    maximum: 5
+    maximum: 1
 
   # Storage class for persistent volumes
   storageClass:
