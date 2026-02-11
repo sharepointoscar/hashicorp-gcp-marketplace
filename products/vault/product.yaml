@@ -3,7 +3,7 @@
 
 metadata:
   id: vault
-  version: 1.21.0
+  version: 1.21.3
   partnerId: 0014M00001h317WQAQ
   solutionId: vault
 
@@ -16,7 +16,7 @@ description: |
   recovery, and HSM auto-unseal.
 
 vendor: HashiCorp
-version: 1.21.0
+version: 1.21.3
 
 support:
   documentation: https://developer.hashicorp.com/vault/docs

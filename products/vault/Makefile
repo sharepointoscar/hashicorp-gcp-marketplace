@@ -2,8 +2,9 @@
 # HashiCorp Vault Enterprise - GCP Marketplace Click-to-Deploy
 
 APP_ID := vault
-VERSION := 1.21.0
-VAULT_VERSION := 1.21.0
+# Version is passed via TAG env var or defaults to value from Dockerfile
+VERSION := $(or $(TAG),$(shell grep 'ARG VAULT_VERSION=' images/vault/Dockerfile | cut -d= -f2))
+VAULT_VERSION := $(VERSION)
 MINOR_VERSION := $(shell echo $(VERSION) | cut -d. -f1,2)
 MAJOR_VERSION := $(shell echo $(VERSION) | cut -d. -f1)
 
