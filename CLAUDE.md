@@ -201,12 +201,13 @@ Provides generic rules for:
 **Prerequisites:**
 ```bash
 docker login images.releases.hashicorp.com -u terraform -p $TFE_LICENSE
+gcloud auth configure-docker us-docker.pkg.dev
 cd products/terraform-enterprise/terraform && terraform apply  # Pre-provision infra
 ```
 
 **Validation:**
 ```bash
-REGISTRY=gcr.io/$PROJECT_ID TAG=1.22.1 \
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace TAG=1.22.1 \
   ./shared/scripts/validate-marketplace.sh terraform-enterprise
 ```
 
@@ -234,7 +235,7 @@ REGISTRY=us-docker.pkg.dev/$PROJECT_ID/vault-marketplace TAG=1.21.0 \
 ```
 
 **Key considerations:**
-- Uses Raft integrated storage (no external DB)
+- Uses file backend storage (single-node, no external DB)
 - Vault Enterprise images are on Docker Hub (no registry login needed)
 - License auto-detected from *.hclic file
 - UBB agent pulled directly from Google's registry
@@ -245,12 +246,13 @@ REGISTRY=us-docker.pkg.dev/$PROJECT_ID/vault-marketplace TAG=1.21.0 \
 **Prerequisites:**
 ```bash
 cp /path/to/consul-license.hclic products/consul/
+gcloud auth configure-docker us-docker.pkg.dev
 cd products/consul && make registry/login
 ```
 
 **Validation:**
 ```bash
-REGISTRY=gcr.io/$PROJECT_ID TAG=1.22.2 \
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/consul-marketplace TAG=1.22.2 \
   ./shared/scripts/validate-marketplace.sh consul
 ```
 
@@ -344,18 +346,18 @@ These files must have matching versions:
 ## Common Commands
 
 ```bash
-# Validate any Kubernetes product (STANDARD WORKFLOW)
-REGISTRY=gcr.io/$PROJECT_ID TAG=<version> \
+# Validate any Kubernetes product (STANDARD WORKFLOW) - uses Artifact Registry
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/<product>-marketplace TAG=<version> \
   ./shared/scripts/validate-marketplace.sh <product>
 
 # Cleanup all test namespaces
 ./shared/scripts/validate-marketplace.sh <product> --cleanup
 
 # Build only (no validation) - from product directory
-cd products/<product> && REGISTRY=gcr.io/$PROJECT_ID TAG=<version> make app/build
+cd products/<product> && REGISTRY=us-docker.pkg.dev/$PROJECT_ID/<product>-marketplace TAG=<version> make app/build
 
 # Check image annotation
-docker manifest inspect gcr.io/$PROJECT_ID/<product>:<tag> | grep service.name
+docker manifest inspect us-docker.pkg.dev/$PROJECT_ID/<product>-marketplace/<image>:<tag> | grep service.name
 
 # Validate Boundary (VM Solution)
 cd products/boundary && cft blueprint metadata -p . -v

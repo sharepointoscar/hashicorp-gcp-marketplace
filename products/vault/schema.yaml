@@ -5,7 +5,7 @@ x-google-marketplace:
   applicationApiVersion: v1beta1
 
   # MUST match the deployer image tag
-  publishedVersion: '1.21.0'
+  publishedVersion: '1.21.3'
   publishedVersionMetadata:
     releaseNote: >-
       Initial release of HashiCorp Vault Enterprise on Google Cloud Marketplace.

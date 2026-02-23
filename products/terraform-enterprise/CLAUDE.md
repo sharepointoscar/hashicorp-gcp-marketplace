@@ -13,11 +13,11 @@ docker login images.releases.hashicorp.com -u terraform -p $TFE_LICENSE
 
 **Standard Build Workflow:**
 ```bash
-# Build all images (tfe, ubbagent, deployer, tester)
-REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 make app/build
+# Build all images (tfe, ubbagent, deployer, tester) - uses Artifact Registry
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace TAG=1.1.3 make app/build
 
 # Run mpdev verify
-REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 make app/verify
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace TAG=1.1.3 make app/verify
 
 # Or use the release script
 ./scripts/release.sh --build --verify
@@ -28,8 +28,9 @@ REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 make app/verify
 - `make app/verify` - Run mpdev verify
 - `make app/install` - Run mpdev install (test deployment)
 - `make helm/lint` - Lint Helm chart
-- `make gcr/clean` - Delete all images from GCR
-- `make gcr/tag-minor` - Add minor version tags (e.g., 1.1 from 1.1.3)
+- `make ar/clean` - Delete images from Artifact Registry (current version)
+- `make ar/clean-all` - Delete ALL images from Artifact Registry
+- `make ar/tag-minor` - Add minor version tags (e.g., 1.1 from 1.1.3)
 - `make clean` - Clean local build artifacts
 - `make registry/login` - Login to HashiCorp registry (requires TFE_LICENSE env var)
 
@@ -58,10 +59,10 @@ terraform output marketplace_inputs  # Values for Marketplace form
 
 ### Image Build Pipeline
 ```
-images/tfe/Dockerfile          → gcr.io/.../terraform-enterprise:TAG
-images/ubbagent/Dockerfile     → gcr.io/.../terraform-enterprise/ubbagent:TAG
-deployer/Dockerfile            → gcr.io/.../terraform-enterprise/deployer:TAG
-apptest/tester/Dockerfile      → gcr.io/.../terraform-enterprise/tester:TAG
+images/tfe/Dockerfile          → us-docker.pkg.dev/.../tfe-marketplace/terraform-enterprise:TAG
+images/ubbagent/Dockerfile     → us-docker.pkg.dev/.../tfe-marketplace/terraform-enterprise/ubbagent:TAG
+deployer/Dockerfile            → us-docker.pkg.dev/.../tfe-marketplace/terraform-enterprise/deployer:TAG
+apptest/tester/Dockerfile      → us-docker.pkg.dev/.../tfe-marketplace/terraform-enterprise/tester:TAG
 ```
 
 ### Key Files

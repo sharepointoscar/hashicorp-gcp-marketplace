@@ -1,7 +1,7 @@
 # images/vault/Dockerfile
 # HashiCorp Vault Enterprise - GCP Marketplace
 
-ARG VAULT_VERSION=1.21.0
+ARG VAULT_VERSION=1.21.3
 
 FROM --platform=linux/amd64 hashicorp/vault-enterprise:${VAULT_VERSION}-ent
 

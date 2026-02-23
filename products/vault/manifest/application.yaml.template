@@ -15,7 +15,7 @@ metadata:
 spec:
   descriptor:
     type: Vault
-    version: '1.21.0'
+    version: '1.21.3'
     description: |-
       HashiCorp Vault Enterprise secures, stores, and tightly controls access to
       tokens, passwords, certificates, API keys, and other secrets in modern
@@ -73,7 +73,7 @@ spec:
         serviceRef:
           name: "$name-vault-ui"
     - name: Vault Version
-      value: "1.21.0"
+      value: "1.21.3"
 
   selector:
     matchLabels:
