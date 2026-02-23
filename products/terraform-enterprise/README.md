@@ -52,12 +52,12 @@ terraform apply -var="project_id=YOUR_PROJECT_ID"
 # Get values for Marketplace form
 terraform output marketplace_inputs
 
-# 2. Build images
+# 2. Build images (uses Artifact Registry)
 cd products/terraform-enterprise
-REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 make app/build
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace TAG=1.1.3 make app/build
 
 # 3. Run validation
-REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 make app/verify
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace TAG=1.1.3 make app/verify
 ```
 
 ## Directory Structure
@@ -99,8 +99,9 @@ make app/build         # Build all images (tfe, ubbagent, deployer, tester)
 make app/verify        # Run mpdev verify
 make app/install       # Run mpdev install
 make helm/lint         # Lint Helm chart
-make gcr/tag-versions  # Add major/minor version tags
-make gcr/clean         # Delete images from GCR
+make ar/tag-versions   # Add major/minor version tags
+make ar/clean          # Delete images from Artifact Registry (current version)
+make ar/clean-all      # Delete ALL images from Artifact Registry
 make clean             # Clean local build artifacts
 make info              # Display version and artifact info
 make registry/login    # Login to HashiCorp registry
@@ -111,11 +112,11 @@ make release           # Clean, build, and tag all versions
 
 ```bash
 # Full validation pipeline (build + verify)
-REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 \
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace TAG=1.1.3 \
   ../../shared/scripts/validate-marketplace.sh terraform-enterprise
 
-# Clean GCR images before building
-REGISTRY=gcr.io/$PROJECT_ID TAG=1.1.3 \
+# Clean Artifact Registry images before building
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace TAG=1.1.3 \
   ../../shared/scripts/validate-marketplace.sh terraform-enterprise --gcr-clean
 ```
 

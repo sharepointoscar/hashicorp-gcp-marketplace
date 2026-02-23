@@ -8,9 +8,12 @@ VAULT_VERSION := $(VERSION)
 MINOR_VERSION := $(shell echo $(VERSION) | cut -d. -f1,2)
 MAJOR_VERSION := $(shell echo $(VERSION) | cut -d. -f1)
 
-# Artifact Registry
-AR_REGISTRY := us-docker.pkg.dev/ibm-software-mp-project-test/vault-marketplace
-MP_SERVICE_NAME := services/vault-enterprise--1-16-ent.endpoints.ibm-software-mp-project-test.cloud.goog
+# Artifact Registry (override via REGISTRY env var for different projects)
+AR_REGISTRY := $(or $(REGISTRY),us-docker.pkg.dev/ibm-software-mp-project-test/vault-marketplace)
+# MP_SERVICE_NAME must match the Google Marketplace Producer Portal value
+# Test:       services/vault-enterprise--1-16-ent.endpoints.ibm-software-mp-project-test.cloud.goog
+# Production: services/ibmvaultselfmanagedbyol.endpoints.ibm-software-mp-project.cloud.goog
+MP_SERVICE_NAME := $(or $(MP_SERVICE_NAME),services/vault-enterprise--1-16-ent.endpoints.ibm-software-mp-project-test.cloud.goog)
 
 # License file (auto-detect .hclic file in current directory)
 # Vault Enterprise images are on Docker Hub (no registry login needed)

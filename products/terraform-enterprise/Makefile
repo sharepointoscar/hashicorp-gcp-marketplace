@@ -14,8 +14,8 @@ MAJOR_VERSION := $(shell echo $(VERSION) | cut -d. -f1)
 # Extract minor version (e.g., 1.1 from 1.1.3) - required by GCP Marketplace
 MINOR_VERSION := $(shell echo $(VERSION) | cut -d. -f1,2)
 
-# Registry configuration (set via environment: REGISTRY=gcr.io/$PROJECT_ID)
-REGISTRY ?= gcr.io/ibm-software-mp-project-test
+# Registry configuration (Artifact Registry - set via environment: REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace)
+REGISTRY ?= us-docker.pkg.dev/ibm-software-mp-project-test/tfe-marketplace
 TAG ?= $(VERSION)
 
 # Marketplace tools tag (latest stable - upgraded for CVE fixes)
@@ -142,40 +142,40 @@ helm/template:
 # Tags: MAJOR (1), MINOR (1.1), PATCH (1.1.3)
 #=============================================================================
 
-.PHONY: gcr/tag-versions
-gcr/tag-versions: gcr/tag-major gcr/tag-minor
+.PHONY: ar/tag-versions
+ar/tag-versions: ar/tag-major ar/tag-minor
 	$(call print_success,All version tags added: $(MAJOR_VERSION) $(MINOR_VERSION) $(TAG))
 
-.PHONY: gcr/tag-major
-gcr/tag-major:
+.PHONY: ar/tag-major
+ar/tag-major:
 	$(call print_notice,Adding major version tags ($(MAJOR_VERSION))...)
-	gcloud container images add-tag --quiet \
+	gcloud artifacts docker tags add \
 		$(REGISTRY)/$(APP_ID):$(TAG) \
 		$(REGISTRY)/$(APP_ID):$(MAJOR_VERSION) 2>/dev/null || true
-	gcloud container images add-tag --quiet \
+	gcloud artifacts docker tags add \
 		$(REGISTRY)/$(APP_ID)/ubbagent:$(TAG) \
 		$(REGISTRY)/$(APP_ID)/ubbagent:$(MAJOR_VERSION) 2>/dev/null || true
-	gcloud container images add-tag --quiet \
+	gcloud artifacts docker tags add \
 		$(REGISTRY)/$(APP_ID)/deployer:$(TAG) \
 		$(REGISTRY)/$(APP_ID)/deployer:$(MAJOR_VERSION) 2>/dev/null || true
-	gcloud container images add-tag --quiet \
+	gcloud artifacts docker tags add \
 		$(REGISTRY)/$(APP_ID)/tester:$(TAG) \
 		$(REGISTRY)/$(APP_ID)/tester:$(MAJOR_VERSION) 2>/dev/null || true
 	$(call print_success,Major version tags added: $(MAJOR_VERSION))
 
-.PHONY: gcr/tag-minor
-gcr/tag-minor:
+.PHONY: ar/tag-minor
+ar/tag-minor:
 	$(call print_notice,Adding minor version tags ($(MINOR_VERSION))...)
-	gcloud container images add-tag --quiet \
+	gcloud artifacts docker tags add \
 		$(REGISTRY)/$(APP_ID):$(TAG) \
 		$(REGISTRY)/$(APP_ID):$(MINOR_VERSION) 2>/dev/null || true
-	gcloud container images add-tag --quiet \
+	gcloud artifacts docker tags add \
 		$(REGISTRY)/$(APP_ID)/ubbagent:$(TAG) \
 		$(REGISTRY)/$(APP_ID)/ubbagent:$(MINOR_VERSION) 2>/dev/null || true
-	gcloud container images add-tag --quiet \
+	gcloud artifacts docker tags add \
 		$(REGISTRY)/$(APP_ID)/deployer:$(TAG) \
 		$(REGISTRY)/$(APP_ID)/deployer:$(MINOR_VERSION) 2>/dev/null || true
-	gcloud container images add-tag --quiet \
+	gcloud artifacts docker tags add \
 		$(REGISTRY)/$(APP_ID)/tester:$(TAG) \
 		$(REGISTRY)/$(APP_ID)/tester:$(MINOR_VERSION) 2>/dev/null || true
 	$(call print_success,Minor version tags added: $(MINOR_VERSION))
@@ -199,7 +199,7 @@ endif
 #=============================================================================
 
 .PHONY: release
-release: clean app/build gcr/tag-versions
+release: clean app/build ar/tag-versions
 	$(call print_success,Release $(VERSION) complete!)
 	@echo ""
 	@echo "=== ARTIFACTS ==="
@@ -221,13 +221,31 @@ clean::
 	$(call print_notice,Cleaning build artifacts...)
 	rm -rf $(BUILD_DIR)
 
-.PHONY: gcr/clean
-gcr/clean:
-	$(call print_notice,Cleaning GCR images...)
-	gcloud container images delete $(REGISTRY)/$(APP_ID):$(TAG) --quiet --force-delete-tags 2>/dev/null || true
-	gcloud container images delete $(REGISTRY)/$(APP_ID)/ubbagent:$(TAG) --quiet --force-delete-tags 2>/dev/null || true
-	gcloud container images delete $(REGISTRY)/$(APP_ID)/deployer:$(TAG) --quiet --force-delete-tags 2>/dev/null || true
-	gcloud container images delete $(REGISTRY)/$(APP_ID)/tester:$(TAG) --quiet --force-delete-tags 2>/dev/null || true
+.PHONY: ar/clean
+ar/clean:
+	$(call print_notice,Cleaning Artifact Registry images for $(APP_ID)...)
+	-gcloud artifacts docker images delete "$(REGISTRY)/$(APP_ID):$(TAG)" --delete-tags --quiet 2>/dev/null || true
+	-gcloud artifacts docker images delete "$(REGISTRY)/$(APP_ID)/ubbagent:$(TAG)" --delete-tags --quiet 2>/dev/null || true
+	-gcloud artifacts docker images delete "$(REGISTRY)/$(APP_ID)/deployer:$(TAG)" --delete-tags --quiet 2>/dev/null || true
+	-gcloud artifacts docker images delete "$(REGISTRY)/$(APP_ID)/tester:$(TAG)" --delete-tags --quiet 2>/dev/null || true
+	$(call print_success,Artifact Registry images cleaned)
+
+.PHONY: ar/clean-all
+ar/clean-all:
+	$(call print_notice,Cleaning ALL Artifact Registry images for $(APP_ID)...)
+	-for digest in $$(gcloud artifacts docker images list "$(REGISTRY)/$(APP_ID)" --format='get(version)' 2>/dev/null); do \
+		gcloud artifacts docker images delete "$(REGISTRY)/$(APP_ID)@$$digest" --delete-tags --quiet 2>/dev/null || true; \
+	done
+	-for digest in $$(gcloud artifacts docker images list "$(REGISTRY)/$(APP_ID)/ubbagent" --format='get(version)' 2>/dev/null); do \
+		gcloud artifacts docker images delete "$(REGISTRY)/$(APP_ID)/ubbagent@$$digest" --delete-tags --quiet 2>/dev/null || true; \
+	done
+	-for digest in $$(gcloud artifacts docker images list "$(REGISTRY)/$(APP_ID)/deployer" --format='get(version)' 2>/dev/null); do \
+		gcloud artifacts docker images delete "$(REGISTRY)/$(APP_ID)/deployer@$$digest" --delete-tags --quiet 2>/dev/null || true; \
+	done
+	-for digest in $$(gcloud artifacts docker images list "$(REGISTRY)/$(APP_ID)/tester" --format='get(version)' 2>/dev/null); do \
+		gcloud artifacts docker images delete "$(REGISTRY)/$(APP_ID)/tester@$$digest" --delete-tags --quiet 2>/dev/null || true; \
+	done
+	$(call print_success,All Artifact Registry images cleaned for $(APP_ID))
 
 #=============================================================================
 # INFO
