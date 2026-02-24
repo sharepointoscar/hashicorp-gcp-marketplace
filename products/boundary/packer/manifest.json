@@ -17,7 +17,25 @@
       "artifact_id": "hashicorp-ubuntu2204-boundary-x86-64-v0210-20260117",
       "packer_run_uuid": "b5296040-20e9-92f8-b95e-a504bd66ae95",
       "custom_data": null
+    },
+    {
+      "name": "boundary",
+      "builder_type": "googlecompute",
+      "build_time": 1771965300,
+      "files": null,
+      "artifact_id": "hashicorp-ubuntu2204-boundary-x86-64-v0210-20260224",
+      "packer_run_uuid": "0e796d45-9fe5-e11c-6e9f-a2a5927104cd",
+      "custom_data": null
+    },
+    {
+      "name": "boundary",
+      "builder_type": "googlecompute",
+      "build_time": 1771968322,
+      "files": null,
+      "artifact_id": "hashicorp-ubuntu2204-boundary-x86-64-v0210-20260224",
+      "packer_run_uuid": "2080d05f-92a8-d046-f98e-52f6e4979941",
+      "custom_data": null
     }
   ],
-  "last_run_uuid": "b5296040-20e9-92f8-b95e-a504bd66ae95"
+  "last_run_uuid": "2080d05f-92a8-d046-f98e-52f6e4979941"
 }

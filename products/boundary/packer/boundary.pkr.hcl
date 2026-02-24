@@ -50,7 +50,7 @@ variable "image_family" {
 variable "marketplace_license" {
   type        = string
   description = "GCP Marketplace license to attach to the image"
-  default     = "projects/ibm-software-mp-project-test/global/licenses/cloud-marketplace-a515e71bc1c469c1-df1ebeb69c0ba664"
+  default     = "projects/ibm-software-mp-project/global/licenses/cloud-marketplace-e77777a4016af721-df1ebeb69c0ba664"
 }
 
 variable "source_image_family" {
@@ -144,7 +144,7 @@ source "googlecompute" "boundary" {
   network    = "default"
   subnetwork = "default"
 
-  # Use internal IP if no external IP available
+  # Use external IP for builds (test project); copy image to prod after
   use_internal_ip = false
 
   # Tags for firewall rules

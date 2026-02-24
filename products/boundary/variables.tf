@@ -281,7 +281,7 @@ variable "common_labels" {
 variable "boundary_image" {
   type        = string
   description = "Full path to VM image for Boundary instances (e.g. projects/PROJECT/global/images/IMAGE)."
-  default     = "projects/ibm-software-mp-project-test/global/images/hashicorp-ubuntu2204-boundary-x86-64-v0210-20260204"
+  default     = "projects/ibm-software-mp-project/global/images/hashicorp-ubuntu2204-boundary-x86-64-v0210-20260224"
 }
 
 variable "goog_cm_deployment_name" {
