@@ -260,17 +260,14 @@ else
 fi
 
 # Required environment variables
-: "${REGISTRY:?REGISTRY must be set (e.g., gcr.io/your-project-id)}"
+: "${REGISTRY:?REGISTRY must be set (e.g., us-docker.pkg.dev/your-project-id/repo)}"
 : "${TAG:=$PRODUCT_VERSION}"
+: "${MP_SERVICE_NAME:?MP_SERVICE_NAME must be set (GCP Marketplace service name for image annotations)}"
 
 APP_ID="$PRODUCT_ID"
 
-# Deployer image path differs between GCR (nested) and Artifact Registry (flat)
-if [[ "$REGISTRY" == *"pkg.dev"* ]]; then
-    DEPLOYER_IMAGE="${REGISTRY}/deployer:${TAG}"
-else
-    DEPLOYER_IMAGE="${REGISTRY}/${APP_ID}/deployer:${TAG}"
-fi
+# Deployer image path uses nested convention: REGISTRY/APP_ID/deployer:TAG
+DEPLOYER_IMAGE="${REGISTRY}/${APP_ID}/deployer:${TAG}"
 
 PRODUCT_DISPLAY=$(echo "$PRODUCT" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')
 
@@ -311,6 +308,7 @@ echo "  PRODUCT_DIR: $PRODUCT_DIR"
 echo "  REGISTRY: $REGISTRY"
 echo "  TAG: $TAG"
 echo "  DEPLOYER_IMAGE: $DEPLOYER_IMAGE"
+echo "  MP_SERVICE_NAME: $MP_SERVICE_NAME"
 echo "  KEEP_DEPLOYMENT: $KEEP_DEPLOYMENT"
 echo "  GCR_CLEAN: $GCR_CLEAN"
 echo "  GKE_CLUSTER: ${CLUSTER_NAME:-<current context>}"
@@ -366,7 +364,7 @@ fi
 # Step 4: Build and release images (clean, build, push, tag minor versions)
 print_step 4 "Building and Releasing Container Images"
 cd "$PRODUCT_DIR"
-make REGISTRY="$REGISTRY" TAG="$TAG" release
+make REGISTRY="$REGISTRY" TAG="$TAG" MP_SERVICE_NAME="$MP_SERVICE_NAME" release
 print_success "All images built, pushed, and tagged with minor versions"
 
 # Step 5: Verify schema

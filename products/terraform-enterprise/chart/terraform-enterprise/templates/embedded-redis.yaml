@@ -1,0 +1,64 @@
+{{/*
+Embedded Redis for self-contained TFE deployment.
+Always deployed — TFE uses in-cluster Redis for all environments.
+*/}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: embedded-redis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: embedded-redis
+    app.kubernetes.io/name: {{ .Release.Name }}
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6379
+  selector:
+    app: embedded-redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embedded-redis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: embedded-redis
+    app.kubernetes.io/name: {{ .Release.Name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: embedded-redis
+  template:
+    metadata:
+      labels:
+        app: embedded-redis
+        app.kubernetes.io/name: {{ .Release.Name }}
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        command:
+        - redis-server
+        - --requirepass
+        - {{ .Values.redisPassword | quote }}
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - -a
+            - {{ .Values.redisPassword | quote }}
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 10

@@ -133,42 +133,37 @@ entries as `valueFrom` environment variables in the Values file.
 {{- end }}
 
 {{/*
-GCP Marketplace: Map flat schema properties to TFE environment variables
-These are used when deploying via GCP Marketplace deployer_helm
-Infrastructure must be pre-provisioned via Terraform (see terraform/ directory)
+GCP Marketplace: Map flat schema properties to TFE environment variables.
+Self-contained architecture — all services run in-cluster.
 */}}
 {{- define "helpers.gcp-marketplace-env-variables"}}
 {{- if .Values.hostname }}
 TFE_HOSTNAME: {{ .Values.hostname | quote }}
 {{- end }}
-{{- if .Values.databaseHost }}
-TFE_DATABASE_HOST: {{ .Values.databaseHost | quote }}
-{{- end }}
+TFE_DATABASE_HOST: "embedded-postgres:5432"
 {{- if .Values.databaseName }}
 TFE_DATABASE_NAME: {{ .Values.databaseName | quote }}
 {{- end }}
 {{- if .Values.databaseUser }}
 TFE_DATABASE_USER: {{ .Values.databaseUser | quote }}
 {{- end }}
-{{- if .Values.redisHost }}
-TFE_REDIS_HOST: {{ .Values.redisHost | quote }}
+TFE_DATABASE_PARAMETERS: "sslmode=require"
+TFE_REDIS_HOST: "embedded-redis:6379"
 TFE_REDIS_USE_AUTH: "true"
-{{- end }}
-{{- if .Values.objectStorageBucket }}
-TFE_OBJECT_STORAGE_TYPE: "google"
-TFE_OBJECT_STORAGE_GOOGLE_BUCKET: {{ .Values.objectStorageBucket | quote }}
-{{- end }}
-{{- if .Values.objectStorageProject }}
-TFE_OBJECT_STORAGE_GOOGLE_PROJECT: {{ .Values.objectStorageProject | quote }}
-{{- end }}
+TFE_OBJECT_STORAGE_TYPE: "s3"
+TFE_OBJECT_STORAGE_S3_BUCKET: {{ .Values.minio.bucketName | quote }}
+TFE_OBJECT_STORAGE_S3_REGION: "us-east-1"
+TFE_OBJECT_STORAGE_S3_ENDPOINT: "http://embedded-minio:9000"
+TFE_OBJECT_STORAGE_S3_ACCESS_KEY_ID: {{ .Values.minio.accessKey | quote }}
+TFE_OBJECT_STORAGE_S3_USE_INSTANCE_PROFILE: "false"
 {{- if .Values.tlsCACertificate }}
 TFE_TLS_CA_BUNDLE_FILE: "/etc/ssl/private/ca-certificate.crt"
 {{- end }}
 {{- end }}
 
 {{/*
-GCP Marketplace: Map flat schema properties to TFE secrets (base64 encoded)
-Infrastructure must be pre-provisioned via Terraform (see terraform/ directory)
+GCP Marketplace: Map flat schema properties to TFE secrets (base64 encoded).
+Self-contained architecture — all services run in-cluster.
 */}}
 {{- define "helpers.gcp-marketplace-env-secrets"}}
 {{- if .Values.databasePassword }}
@@ -176,6 +171,9 @@ TFE_DATABASE_PASSWORD: {{ .Values.databasePassword | b64enc }}
 {{- end }}
 {{- if .Values.redisPassword }}
 TFE_REDIS_PASSWORD: {{ .Values.redisPassword | b64enc }}
+{{- end }}
+{{- if .Values.minio.secretKey }}
+TFE_OBJECT_STORAGE_S3_SECRET_ACCESS_KEY: {{ .Values.minio.secretKey | b64enc }}
 {{- end }}
 {{- if .Values.tfeLicense }}
 TFE_LICENSE: {{ .Values.tfeLicense | b64enc }}

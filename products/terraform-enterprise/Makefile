@@ -21,8 +21,11 @@ TAG ?= $(VERSION)
 # Marketplace tools tag (latest stable - upgraded for CVE fixes)
 MARKETPLACE_TOOLS_TAG ?= 0.12.10
 
-# Marketplace service name for image annotations
-MP_SERVICE_NAME := services/terraform-enterprise.endpoints.ibm-software-mp-project-test.cloud.goog
+# Marketplace service name for image annotations (REQUIRED — no default)
+# Must be set via environment variable. Example values:
+# Test:       MP_SERVICE_NAME=services/terraform-enterprise.endpoints.ibm-software-mp-project-test.cloud.goog
+# Production: MP_SERVICE_NAME=services/ibmterraformselfmanagedbyol.endpoints.ibm-software-mp-project.cloud.goog
+MP_SERVICE_NAME ?=
 
 # Build directory
 BUILD_DIR := .build
@@ -39,10 +42,20 @@ TESTER_TIMEOUT := 1800
 #=============================================================================
 
 .PHONY: app/build
-app/build:: $(BUILD_DIR)/$(APP_ID)/tfe \
+app/build:: check-mp-service-name $(BUILD_DIR)/$(APP_ID)/tfe \
             $(BUILD_DIR)/$(APP_ID)/ubbagent \
             $(BUILD_DIR)/$(APP_ID)/deployer \
             $(BUILD_DIR)/$(APP_ID)/tester
+
+# Guard: MP_SERVICE_NAME is required for image annotations
+.PHONY: check-mp-service-name
+check-mp-service-name:
+ifndef MP_SERVICE_NAME
+	$(error MP_SERVICE_NAME is required. Set it to the GCP Marketplace service name for image annotations)
+endif
+ifeq ($(MP_SERVICE_NAME),)
+	$(error MP_SERVICE_NAME is empty. Set it to the GCP Marketplace service name for image annotations)
+endif
 
 #=============================================================================
 # IMAGE TARGETS

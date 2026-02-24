@@ -1,0 +1,97 @@
+{{/*
+Embedded PostgreSQL for self-contained TFE deployment.
+Always deployed — TFE uses in-cluster PostgreSQL for all environments.
+*/}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: embedded-postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: embedded-postgres
+    app.kubernetes.io/name: {{ .Release.Name }}
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    app: embedded-postgres
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embedded-postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: embedded-postgres
+    app.kubernetes.io/name: {{ .Release.Name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: embedded-postgres
+  template:
+    metadata:
+      labels:
+        app: embedded-postgres
+        app.kubernetes.io/name: {{ .Release.Name }}
+    spec:
+      volumes:
+      - name: postgres-ssl
+        emptyDir: {}
+      initContainers:
+      - name: generate-ssl-certs
+        image: alpine:3.20
+        command: ['sh', '-c']
+        args:
+        - |
+          apk add --no-cache openssl
+          openssl req -new -x509 -days 3650 -nodes \
+            -out /pg-ssl/server.crt \
+            -keyout /pg-ssl/server.key \
+            -subj "/CN=embedded-postgres"
+          chown 70:70 /pg-ssl/server.key /pg-ssl/server.crt
+          chmod 600 /pg-ssl/server.key
+          chmod 644 /pg-ssl/server.crt
+        volumeMounts:
+        - name: postgres-ssl
+          mountPath: /pg-ssl
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        args:
+        - -c
+        - ssl=on
+        - -c
+        - ssl_cert_file=/pg-ssl/server.crt
+        - -c
+        - ssl_key_file=/pg-ssl/server.key
+        env:
+        - name: POSTGRES_DB
+          value: {{ .Values.databaseName | default "tfe" | quote }}
+        - name: POSTGRES_USER
+          value: {{ .Values.databaseUser | default "tfe" | quote }}
+        - name: POSTGRES_PASSWORD
+          value: {{ .Values.databasePassword | quote }}
+        ports:
+        - containerPort: 5432
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        volumeMounts:
+        - name: postgres-ssl
+          mountPath: /pg-ssl
+          readOnly: true
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - {{ .Values.databaseUser | default "tfe" }}
+          initialDelaySeconds: 5
+          periodSeconds: 10

@@ -1,11 +1,13 @@
 # images/ubbagent/Dockerfile
-# Custom UBB Agent with patched golang.org/x/crypto vulnerability (CVE-2024-45337)
+# Custom UBB Agent with patched vulnerabilities:
+#   - CVE-2024-45337: golang.org/x/crypto < 0.31.0
+#   - CVE-2025-68121: Go stdlib < 1.24.13 (fixed by using Go 1.25)
 #
 # This builds the ubbagent from source with updated dependencies to fix
 # security vulnerabilities in the official Google image.
 
 # Build stage
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 # Install git for cloning
 RUN apk add --no-cache git
