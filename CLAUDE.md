@@ -4,6 +4,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## CRITICAL RULES - DO NOT VIOLATE
 
+### NEVER Make Architecture Decisions Autonomously
+
+**Always ask the user before making design choices.** This includes but is not limited to:
+- Choosing between implementation approaches
+- Adding/removing infrastructure components
+- Changing database connection parameters (e.g., SSL mode)
+- Modifying deployment topology
+- Adding new containers, sidecars, or init containers
+
+**If something fails and requires an architecture-level fix, present the options to the user and let them decide.**
+
+### Environment Isolation (Test vs Production)
+
+**Running in the test environment means NEVER touching resources in another project.**
+
+- Test project: `ibm-software-mp-project-test` — test cluster: `vault-mp-test` (us-central1-a)
+- Production project: `ibm-software-mp-project` — production cluster: `vault-mp` (us-central1-a)
+- Always verify `kubectl config current-context` matches the intended environment before running commands
+- All scripts and Makefiles MUST be parameterized — never hardcode project IDs, registry paths, or cluster names
+- When running validation, use the correct REGISTRY for the target environment:
+  - Test: `REGISTRY=us-docker.pkg.dev/ibm-software-mp-project-test/tfe-marketplace`
+  - Prod: `REGISTRY=us-docker.pkg.dev/ibm-software-mp-project/tfe-marketplace`
+
 ### NEVER Create Infrastructure Outside of Terraform
 
 **VIOLATION ALERT**: When infrastructure is managed by Terraform, you must NEVER create, modify, or delete cloud resources using CLI commands (`gcloud`, `kubectl`, `aws`, etc.) or any other method outside of Terraform.
@@ -167,7 +190,7 @@ products/boundary/
 ### Makefile.product
 Products must define:
 - `APP_ID`: Product identifier (e.g., `vault`, `terraform-enterprise`)
-- `MP_SERVICE_NAME`: GCP Marketplace service annotation
+- `MP_SERVICE_NAME`: GCP Marketplace service annotation (**REQUIRED env var** — no default, build fails if empty)
 
 Provides generic rules for:
 - `$(BUILD_DIR)/$(APP_ID)/deployer` - Deployer image build
@@ -411,6 +434,7 @@ psql "postgresql://boundary:PASSWORD@CLOUD_SQL_IP:5432/boundary?sslmode=require"
 | `TFE_LICENSE` | TFE license (for registry auth) | terraform-enterprise |
 | `GKE_CLUSTER` | GKE cluster name | validate-marketplace.sh |
 | `GKE_ZONE` | GKE cluster zone | validate-marketplace.sh |
+| `MP_SERVICE_NAME` | **REQUIRED.** GCP Marketplace service annotation for images | All K8s products |
 
 ## Critical Implementation Notes
 

@@ -1,0 +1,66 @@
+{{/*
+Embedded MinIO for self-contained TFE deployment.
+Always deployed — TFE uses in-cluster S3-compatible storage for all environments.
+Bucket creation happens in the TFE deployment's init containers (after minio is reachable).
+*/}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: embedded-minio
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: embedded-minio
+    app.kubernetes.io/name: {{ .Release.Name }}
+spec:
+  ports:
+  - port: 9000
+    targetPort: 9000
+  selector:
+    app: embedded-minio
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: embedded-minio
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: embedded-minio
+    app.kubernetes.io/name: {{ .Release.Name }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: embedded-minio
+  template:
+    metadata:
+      labels:
+        app: embedded-minio
+        app.kubernetes.io/name: {{ .Release.Name }}
+    spec:
+      containers:
+      - name: minio
+        image: minio/minio:latest
+        args:
+        - server
+        - /data
+        env:
+        - name: MINIO_ROOT_USER
+          value: {{ .Values.minio.accessKey | quote }}
+        - name: MINIO_ROOT_PASSWORD
+          value: {{ .Values.minio.secretKey | quote }}
+        ports:
+        - containerPort: 9000
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /minio/health/ready
+            port: 9000
+          initialDelaySeconds: 5
+          periodSeconds: 10

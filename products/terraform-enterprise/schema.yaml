@@ -39,55 +39,6 @@ properties:
       type: NAMESPACE
 
   # ---------------------------------------------------------------------------
-  # Infrastructure (pre-provisioned via Terraform)
-  # Use: cd terraform && terraform apply -var-file=marketplace_test.tfvars
-  # ---------------------------------------------------------------------------
-
-  databaseHost:
-    type: string
-    title: Database Host
-    description: "Cloud SQL PostgreSQL private IP address"
-
-  databaseName:
-    type: string
-    title: Database Name
-    default: "tfe"
-
-  databaseUser:
-    type: string
-    title: Database User
-    default: "tfe"
-
-  databasePassword:
-    type: string
-    title: Database Password
-    description: "PostgreSQL password for TFE user"
-    x-google-marketplace:
-      type: MASKED_FIELD
-
-  redisHost:
-    type: string
-    title: Redis Host
-    description: "Memorystore Redis host:port (e.g., 10.0.0.5:6379)"
-
-  redisPassword:
-    type: string
-    title: Redis Auth String
-    description: "Memorystore Redis AUTH string"
-    x-google-marketplace:
-      type: MASKED_FIELD
-
-  objectStorageBucket:
-    type: string
-    title: GCS Bucket Name
-    description: "GCS bucket for TFE object storage"
-
-  objectStorageProject:
-    type: string
-    title: GCP Project ID (Storage)
-    description: "GCP project ID where the GCS bucket resides"
-
-  # ---------------------------------------------------------------------------
   # TFE Configuration
   # ---------------------------------------------------------------------------
 
@@ -145,7 +96,7 @@ properties:
     x-google-marketplace:
       type: SERVICE_ACCOUNT
       serviceAccount:
-        description: "TFE service account for GCS access via Workload Identity"
+        description: "TFE service account for in-cluster operations"
         roles:
         - type: Role
           rulesType: CUSTOM
@@ -166,11 +117,6 @@ properties:
 required:
   - name
   - namespace
-  - databaseHost
-  - databasePassword
-  - redisHost
-  - objectStorageBucket
-  - objectStorageProject
   - hostname
   - tfeLicense
   - encryptionPassword

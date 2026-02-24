@@ -1,24 +1,24 @@
 # Terraform Enterprise - GCP Marketplace
 
-HashiCorp Terraform Enterprise for GCP Marketplace using the **Kubernetes App (mpdev)** model with external managed services (Cloud SQL, Memorystore Redis, GCS).
+HashiCorp Terraform Enterprise for GCP Marketplace using the **Kubernetes App (mpdev)** model with a **self-contained architecture**. All services run in-cluster — no external Cloud SQL, Memorystore, or GCS required.
 
 ## Architecture
 
-Infrastructure is provisioned separately using Terraform before deploying TFE.
-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  Phase 1: Infrastructure (Terraform)                            │
-│  └── terraform/ directory                                       │
-│      ├── Cloud SQL PostgreSQL                                   │
-│      ├── Memorystore Redis                                      │
-│      └── GCS Bucket                                             │
-├─────────────────────────────────────────────────────────────────┤
-│  Phase 2: Application (mpdev deployer)                          │
-│  └── Helm chart via deployer_helm                               │
-│      ├── TFE Deployment                                         │
-│      ├── UBB Agent Sidecar                                      │
-│      └── Services, ConfigMaps, Secrets                          │
+│  GKE Cluster                                                     │
+│                                                                  │
+│  ┌──────────────────────┐  ┌──────────────────┐                 │
+│  │ TFE Deployment       │  │ embedded-postgres │                 │
+│  │  ├─ terraform-enterprise  │  (SSL enabled)     │                 │
+│  │  └─ ubbagent (sidecar)│  └──────────────────┘                 │
+│  └──────────────────────┘  ┌──────────────────┐                 │
+│                             │ embedded-redis   │                 │
+│  Init containers:           └──────────────────┘                 │
+│  1. wait-for-postgres       ┌──────────────────┐                 │
+│  2. wait-for-redis          │ embedded-minio   │                 │
+│  3. wait-for-minio          │ (S3-compatible)  │                 │
+│  4. create-minio-bucket     └──────────────────┘                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -26,38 +26,66 @@ Infrastructure is provisioned separately using Terraform before deploying TFE.
 
 1. **GCP Project** with billing enabled
 2. **GKE Cluster** (1.33+ recommended)
-3. **Docker authenticated** to GCR:
+3. **Artifact Registry** authenticated:
    ```bash
-   gcloud auth configure-docker
+   gcloud auth configure-docker us-docker.pkg.dev
    ```
-4. **HashiCorp registry authenticated** (for building TFE image):
+4. **HashiCorp registry** authenticated (for building TFE image):
    ```bash
    export TFE_LICENSE=$(cat "terraform exp Mar 31 2026.hclic")
    make registry/login
    ```
 5. **mpdev installed** (for verification):
    ```bash
-   gcloud components install kubectl
    docker pull gcr.io/cloud-marketplace-tools/k8s/dev
    ```
+
+## Required Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `REGISTRY` | Artifact Registry path | `us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace` |
+| `TAG` | Image version tag | `1.1.3` |
+| `MP_SERVICE_NAME` | **REQUIRED.** GCP Marketplace service annotation | See values below |
+
+**MP_SERVICE_NAME values by environment:**
+- Test: `MP_SERVICE_NAME=services/terraform-enterprise.endpoints.ibm-software-mp-project-test.cloud.goog`
+- Production: `MP_SERVICE_NAME=services/ibmterraformselfmanagedbyol.endpoints.ibm-software-mp-project.cloud.goog`
+
+> **WARNING:** `MP_SERVICE_NAME` has no default. The build will fail if it is not set. Every image MUST be annotated with the correct service name for the target environment.
 
 ## Quick Start
 
 ```bash
-# 1. Provision infrastructure first
-cd products/terraform-enterprise/terraform
-terraform init
-terraform apply -var="project_id=YOUR_PROJECT_ID"
-
-# Get values for Marketplace form
-terraform output marketplace_inputs
-
-# 2. Build images (uses Artifact Registry)
 cd products/terraform-enterprise
-REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace TAG=1.1.3 make app/build
 
-# 3. Run validation
-REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace TAG=1.1.3 make app/verify
+# Build all images (MUST set MP_SERVICE_NAME)
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace TAG=1.1.3 \
+  MP_SERVICE_NAME=services/<service-name>.endpoints.$PROJECT_ID.cloud.goog \
+  make app/build
+
+# Run mpdev verify
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace TAG=1.1.3 \
+  make app/verify
+
+# Full release pipeline (clean + build + tag versions)
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace TAG=1.1.3 \
+  MP_SERVICE_NAME=services/<service-name>.endpoints.$PROJECT_ID.cloud.goog \
+  make release
+```
+
+## Shared Validation Script
+
+```bash
+# Full validation pipeline (build + install + verify)
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace TAG=1.1.3 \
+  MP_SERVICE_NAME=services/<service-name>.endpoints.$PROJECT_ID.cloud.goog \
+  ../../shared/scripts/validate-marketplace.sh terraform-enterprise
+
+# Clean Artifact Registry images before building
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace TAG=1.1.3 \
+  MP_SERVICE_NAME=services/<service-name>.endpoints.$PROJECT_ID.cloud.goog \
+  ../../shared/scripts/validate-marketplace.sh terraform-enterprise --gcr-clean
 ```
 
 ## Directory Structure
@@ -71,8 +99,12 @@ products/terraform-enterprise/
 │       ├── Chart.yaml
 │       ├── values.yaml
 │       └── templates/
-│           ├── deployment.yaml           # TFE Deployment with initContainer
-│           └── rbac.yaml                 # RBAC for resources
+│           ├── deployment.yaml          # TFE Deployment with init containers
+│           ├── embedded-postgres.yaml   # In-cluster PostgreSQL (SSL enabled)
+│           ├── embedded-redis.yaml      # In-cluster Redis
+│           ├── embedded-minio.yaml      # In-cluster MinIO (S3-compatible)
+│           ├── _helpers.tpl             # Template helpers + env var mapping
+│           └── ...
 ├── deployer/
 │   └── Dockerfile               # Deployer image (deployer_helm base)
 ├── apptest/
@@ -85,39 +117,26 @@ products/terraform-enterprise/
 ├── images/
 │   ├── tfe/Dockerfile           # TFE container image
 │   └── ubbagent/Dockerfile      # Usage-based billing agent
-└── terraform/                   # Infrastructure provisioning
-    ├── main.tf
-    ├── variables.tf
-    ├── outputs.tf
-    └── modules/infrastructure/
+└── terraform/                   # Infrastructure provisioning (legacy)
 ```
 
 ## Makefile Targets
+
+All build targets require `REGISTRY`, `TAG`, and `MP_SERVICE_NAME`:
 
 ```bash
 make app/build         # Build all images (tfe, ubbagent, deployer, tester)
 make app/verify        # Run mpdev verify
 make app/install       # Run mpdev install
 make helm/lint         # Lint Helm chart
+make helm/template     # Render Helm templates
 make ar/tag-versions   # Add major/minor version tags
 make ar/clean          # Delete images from Artifact Registry (current version)
 make ar/clean-all      # Delete ALL images from Artifact Registry
 make clean             # Clean local build artifacts
 make info              # Display version and artifact info
 make registry/login    # Login to HashiCorp registry
-make release           # Clean, build, and tag all versions
-```
-
-## Shared Validation Script
-
-```bash
-# Full validation pipeline (build + verify)
-REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace TAG=1.1.3 \
-  ../../shared/scripts/validate-marketplace.sh terraform-enterprise
-
-# Clean Artifact Registry images before building
-REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace TAG=1.1.3 \
-  ../../shared/scripts/validate-marketplace.sh terraform-enterprise --gcr-clean
+make release           # Clean, build, push, and tag all versions
 ```
 
 ## Images Built
@@ -139,7 +158,7 @@ User inputs defined in `schema.yaml`:
 | `name` | Application instance name |
 | `namespace` | Kubernetes namespace |
 | `hostname` | TFE FQDN |
-| `license` | TFE license (base64) |
+| `tfeLicense` | TFE license |
 | `encryptionPassword` | Encryption password (16+ chars) |
 
 ### TLS Configuration
@@ -148,18 +167,6 @@ User inputs defined in `schema.yaml`:
 | `tlsCertificate` | TLS cert (base64) |
 | `tlsPrivateKey` | TLS key (base64) |
 | `tlsCACertificate` | CA cert (base64) |
-
-### Pre-provisioned Infrastructure
-| Property | Description |
-|----------|-------------|
-| `databaseHost` | Cloud SQL PostgreSQL private IP |
-| `databaseName` | Database name (default: tfe) |
-| `databaseUser` | Database user (default: tfe) |
-| `databasePassword` | Database password |
-| `redisHost` | Memorystore Redis private IP |
-| `redisPassword` | Redis AUTH string |
-| `objectStorageBucket` | GCS bucket name |
-| `objectStorageProject` | GCP project ID |
 
 ### Service Account
 | Property | Description |
@@ -179,28 +186,20 @@ kubectl get pods -n <namespace>
 kubectl logs -n <namespace> <pod> -c terraform-enterprise
 ```
 
+### Check embedded services
+
+```bash
+kubectl logs -n <namespace> -l app=embedded-postgres
+kubectl logs -n <namespace> -l app=embedded-redis
+kubectl logs -n <namespace> -l app=embedded-minio
+```
+
 ### Health check endpoint
 
 ```bash
 kubectl get svc -n <namespace>
 curl -k https://<LB_IP>/_health_check
 # Expected: {"postgres":"UP","redis":"UP","vault":"UP"}
-```
-
-### Vault manager crash loop
-
-This usually indicates stale encryption data. Clean vault tables:
-```bash
-# Flush Redis
-kubectl run redis-flush --rm -it --restart=Never --image=redis:7 -- \
-  redis-cli -h <REDIS_IP> -a "<password>" FLUSHALL
-
-# Truncate vault tables
-kubectl run psql-cleanup --rm -i --restart=Never --image=postgres:15 -- \
-  psql "postgresql://tfe:<password>@<DB_IP>:5432/tfe?sslmode=require" <<EOF
-TRUNCATE vault.vault_kv_store CASCADE;
-TRUNCATE vault.vault_ha_locks CASCADE;
-EOF
 ```
 
 ### Clean up test namespaces
@@ -216,12 +215,14 @@ kubectl delete ns apptest-*
 ### Verify image annotations
 
 ```bash
-docker manifest inspect gcr.io/$PROJECT_ID/terraform-enterprise:1.1.3 | jq '.annotations'
+gcloud artifacts docker images describe \
+  us-docker.pkg.dev/$PROJECT_ID/tfe-marketplace/terraform-enterprise:1.1.3 \
+  --format=yaml | grep service.name
 ```
 
 All images must have:
 ```
-com.googleapis.cloudmarketplace.product.service.name=services/tfe-self-managed.endpoints.PROJECT_ID.cloud.goog
+com.googleapis.cloudmarketplace.product.service.name=<MP_SERVICE_NAME>
 ```
 
 ## Version Synchronization
@@ -236,5 +237,5 @@ These files must have matching versions:
 Images must be:
 - Single architecture: `linux/amd64`
 - Docker V2 manifests: `--provenance=false --sbom=false`
-- Annotated with `com.googleapis.cloudmarketplace.product.service.name`
-- Tagged with semantic versions (e.g., `1.1.3` and `1.1`)
+- Annotated with `com.googleapis.cloudmarketplace.product.service.name` (**REQUIRED**, set via `MP_SERVICE_NAME`)
+- Tagged with semantic versions (e.g., `1.1.3`, `1.1`, and `1`)
