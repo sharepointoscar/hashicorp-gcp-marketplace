@@ -6,14 +6,14 @@ VERSION := 0.21.2
 BOUNDARY_VERSION := 0.21.0+ent
 
 # GCP Configuration
-PROJECT_ID ?= ibm-software-mp-project-test
+PROJECT_ID ?= ibm-software-mp-project
 ZONE ?= us-central1-a
 
 # Marketplace License (from Producer Portal)
-MARKETPLACE_LICENSE := projects/ibm-software-mp-project-test/global/licenses/cloud-marketplace-a515e71bc1c469c1-df1ebeb69c0ba664
+MARKETPLACE_LICENSE ?= projects/ibm-software-mp-project/global/licenses/cloud-marketplace-e77777a4016af721-df1ebeb69c0ba664
 
 # Cloud Storage for Terraform module ZIP (Object Versioning must be enabled)
-GCS_BUCKET := gs://ibm-software-mp-project-test-tf-modules
+GCS_BUCKET ?= gs://$(PROJECT_ID)-tf-modules
 GCS_PATH := $(GCS_BUCKET)/$(APP_ID)/$(VERSION)
 
 # VM Image naming - GCP Marketplace format: who-vmOS-image-architecture-date
