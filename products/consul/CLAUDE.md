@@ -51,12 +51,23 @@ REGISTRY=gcr.io/$PROJECT_ID TAG=1.22.2 make app/install
 
 This is a GCP Marketplace Click-to-Deploy product for HashiCorp Consul Enterprise using **Raft Integrated Storage** (no external infrastructure required).
 
+### Temporary: Consul 1.22.4 Binary from UBI Image (CVE Fix)
+
+The standard Alpine image for `hashicorp/consul-enterprise:1.22.4-ent` was pulled by HashiCorp from Docker Hub and is unavailable. Only the UBI (Red Hat) variant `1.22.4-ent-ubi` exists. To fix CVE-2025-68121 (Go stdlib < 1.25.7), the Dockerfile uses a multi-stage build:
+
+1. **Stage 1**: Extracts the consul binary (compiled with Go 1.25.7) from `hashicorp/consul-enterprise:1.22.4-ent-ubi`
+2. **Stage 2**: Uses `hashicorp/consul-enterprise:1.22.3-ent` (Alpine) as the base for filesystem, users, and OS packages
+3. Applies `apk upgrade openssl libcrypto3 libssl3` to fix CVE-2025-15467 (OpenSSL < 3.5.5)
+4. Copies the 1.22.4 consul binary over the 1.22.3 binary
+
+**This is temporary.** When HashiCorp publishes `1.22.5-ent` (or re-publishes `1.22.4-ent`) as a standard Alpine image, revert the Dockerfile to use the official image directly.
+
 ### Image Build Pipeline
 ```
-images/consul/Dockerfile      → gcr.io/.../consul:TAG
-(pulled from Google)          → gcr.io/.../consul/ubbagent:TAG
-deployer/Dockerfile           → gcr.io/.../consul/deployer:TAG
-apptest/deployer/Dockerfile   → gcr.io/.../consul/tester:TAG
+images/consul/Dockerfile      → REGISTRY/consul:TAG        (multi-stage: 1.22.4-ubi binary on 1.22.3 Alpine)
+images/ubbagent/Dockerfile    → REGISTRY/consul/ubbagent:TAG (built from source with Go 1.25)
+deployer/Dockerfile           → REGISTRY/consul/deployer:TAG
+apptest/deployer/Dockerfile   → REGISTRY/consul/tester:TAG
 ```
 
 ### Key Files
@@ -67,10 +78,12 @@ apptest/deployer/Dockerfile   → gcr.io/.../consul/tester:TAG
 - `product.yaml` - Product metadata
 
 ### Version Synchronization
-All three files must have matching versions:
-- `schema.yaml` → `publishedVersion: '1.22.2'`
-- `apptest/deployer/schema.yaml` → `publishedVersion: '1.22.2'`
-- `manifest/application.yaml.template` → `version: "1.22.2"`
+All three files must have matching versions (marketplace image tag):
+- `schema.yaml` → `publishedVersion: '1.21.7'`
+- `apptest/deployer/schema.yaml` → `publishedVersion: '1.21.7'`
+- `manifest/application.yaml.template` → `version: "1.21.7"`
+
+Note: `CONSUL_VERSION` in the Makefile (currently `1.22.4`) is the upstream HashiCorp binary version, NOT the marketplace tag. These are intentionally different due to the multi-stage build approach.
 
 ## Consul Configuration
 
@@ -89,7 +102,7 @@ All three files must have matching versions:
 | Service | Type | Purpose |
 |---------|------|---------|
 | `$name-consul-headless` | Headless | StatefulSet DNS discovery |
-| `$name-consul-ui` | LoadBalancer | UI and API access |
+| `$name-consul-ui` | ClusterIP | UI and API access (use port-forward) |
 | `$name-consul-dns` | ClusterIP | DNS queries |
 
 ### Storage
@@ -119,8 +132,8 @@ kubectl exec -n <namespace> $name-consul-0 -- consul operator raft list-peers | 
 kubectl exec -n <namespace> $name-consul-0 -- consul kv put test value
 kubectl exec -n <namespace> $name-consul-0 -- consul kv get test
 
-# Access UI (get LoadBalancer IP)
-kubectl get svc -n <namespace> $name-consul-ui -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+# Access UI (port-forward)
+kubectl port-forward -n <namespace> svc/$name-consul-ui 8500:8500
 ```
 
 ## Common Issues
@@ -132,6 +145,9 @@ kubectl get svc -n <namespace> $name-consul-ui -o jsonpath='{.status.loadBalance
 | `Raft timeout` | Pod communication issues | Check headless service and pod anti-affinity |
 | `License invalid` | Missing or expired license | Update the *.hclic license file or check the secret |
 | `No .hclic file found` | License file missing | Place your Consul Enterprise license (*.hclic) in the product directory |
+| CVE-2025-68121 (Go stdlib) | consul binary compiled with Go < 1.25.7 | Use multi-stage build to extract binary from 1.22.4-ent-ubi (see Architecture section) |
+| CVE-2025-15467 (OpenSSL) | Alpine OpenSSL < 3.5.5 | Add `apk upgrade openssl libcrypto3 libssl3` in Dockerfile |
+| CVE-2025-68121 (ubbagent) | ubbagent built with Go < 1.24.13 | Build from source with `golang:1.25-alpine` (see `images/ubbagent/Dockerfile`) |
 
 ## Enterprise License
 

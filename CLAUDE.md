@@ -27,6 +27,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
   - Test: `REGISTRY=us-docker.pkg.dev/ibm-software-mp-project-test/tfe-marketplace`
   - Prod: `REGISTRY=us-docker.pkg.dev/ibm-software-mp-project/tfe-marketplace`
 
+### NEVER Leave Uncommitted Files When Creating Commits and PRs
+
+**When creating a commit and PR, run `git status` AFTER committing and verify ZERO modified files remain in the working tree.** If ANY product has uncommitted changes from the same body of work, they MUST be included in the commit. NEVER selectively stage only one product's files and leave another product's changes behind.
+
+**Pre-commit checklist:**
+1. Run `git status` — review ALL modified files across ALL products
+2. If changes in multiple products are part of the same work (e.g., registry migration, version bumps, parameterization), stage ALL of them
+3. After committing, run `git status` again — confirm working tree is clean
+4. If unrelated changes exist, explicitly flag them to the user before proceeding
+
 ### NEVER Create Infrastructure Outside of Terraform
 
 **VIOLATION ALERT**: When infrastructure is managed by Terraform, you must NEVER create, modify, or delete cloud resources using CLI commands (`gcloud`, `kubectl`, `aws`, etc.) or any other method outside of Terraform.

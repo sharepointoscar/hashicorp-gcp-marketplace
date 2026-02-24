@@ -134,7 +134,7 @@ spec:
     app.kubernetes.io/component: consul
 
 ---
-# UI Service (LoadBalancer)
+# UI Service (ClusterIP)
 apiVersion: v1
 kind: Service
 metadata:
@@ -144,7 +144,7 @@ metadata:
     app.kubernetes.io/name: $name
     app.kubernetes.io/component: consul
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
     - name: http
       port: 8500
@@ -194,6 +194,9 @@ spec:
   podManagementPolicy: Parallel
   updateStrategy:
     type: RollingUpdate
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Delete
+    whenScaled: Delete
   selector:
     matchLabels:
       app.kubernetes.io/name: $name
@@ -284,18 +287,18 @@ spec:
               command:
                 - consul
                 - members
-            initialDelaySeconds: 30
+            initialDelaySeconds: 60
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 3
+            failureThreshold: 6
           readinessProbe:
             httpGet:
               path: /v1/status/leader
               port: 8500
-            initialDelaySeconds: 10
-            periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 3
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
 
         # UBB Agent Sidecar (Usage-Based Billing - required for Marketplace)
         - name: ubbagent

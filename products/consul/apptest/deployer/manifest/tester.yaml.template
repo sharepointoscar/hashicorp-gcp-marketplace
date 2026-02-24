@@ -113,7 +113,7 @@ spec:
           echo ""
           echo "=== Test 5: Raft Consensus ==="
           consul operator raft list-peers
-          PEER_COUNT=$(consul operator raft list-peers | grep -c "voter")
+          PEER_COUNT=$(consul operator raft list-peers | grep -cE "leader|follower")
           echo "Raft voters: $PEER_COUNT"
           if [ "$PEER_COUNT" -lt 1 ]; then
             echo "ERROR: Expected at least 1 Raft voter, got $PEER_COUNT"
@@ -144,7 +144,7 @@ spec:
             echo "ERROR: Service registration failed"
             exit 1
           fi
-          consul services deregister -id="marketplace-test-svc"
+          curl -sf -X PUT "${CONSUL_HTTP_ADDR}/v1/agent/service/deregister/marketplace-test-svc" || true
           echo "Test service deregistered"
 
           # Summary

@@ -5,12 +5,18 @@ APP_ID := consul
 VERSION := 1.21.7
 MINOR_VERSION := $(shell echo $(VERSION) | cut -d. -f1,2)
 
-# Consul upstream version (use full version for specific patch)
-CONSUL_VERSION := 1.21.7
+# Consul upstream version for binary extraction from UBI image (CVE fix)
+# This is the HashiCorp release version, NOT the marketplace image tag.
+# See images/consul/Dockerfile for the multi-stage build approach.
+CONSUL_VERSION := 1.22.4
 
-# Artifact Registry (same project as TFE)
-AR_REGISTRY := us-docker.pkg.dev/ibm-software-mp-project-test/consul-marketplace
-MP_SERVICE_NAME := services/consul-enterprise-1-21.endpoints.ibm-software-mp-project-test.cloud.goog
+# Registry configuration (Artifact Registry - set via environment: REGISTRY=us-docker.pkg.dev/$PROJECT_ID/consul-marketplace)
+AR_REGISTRY ?= $(REGISTRY)
+
+# Marketplace service name for image annotations (REQUIRED — no default)
+# Must be set via environment variable. Example:
+# Production: MP_SERVICE_NAME=services/ibmconsulselfmanaged.endpoints.ibm-software-mp-project.cloud.goog
+MP_SERVICE_NAME ?=
 
 # License file (auto-detect .hclic file in current directory)
 LICENSE_FILE := $(wildcard *.hclic)
@@ -85,8 +91,24 @@ $(BUILD_DIR)/tester: apptest/deployer/Dockerfile
 # FULL BUILD
 #=============================================================================
 
+# Guard: REGISTRY and MP_SERVICE_NAME are required
+.PHONY: check-required-vars
+check-required-vars:
+ifndef REGISTRY
+	$(error REGISTRY is required. Set it to the Artifact Registry path, e.g. REGISTRY=us-docker.pkg.dev/$$PROJECT_ID/consul-marketplace)
+endif
+ifeq ($(REGISTRY),)
+	$(error REGISTRY is empty. Set it to the Artifact Registry path)
+endif
+ifndef MP_SERVICE_NAME
+	$(error MP_SERVICE_NAME is required. Set it to the GCP Marketplace service name for image annotations)
+endif
+ifeq ($(MP_SERVICE_NAME),)
+	$(error MP_SERVICE_NAME is empty. Set it to the GCP Marketplace service name for image annotations)
+endif
+
 .PHONY: app/build
-app/build: images/build $(BUILD_DIR)/deployer $(BUILD_DIR)/tester
+app/build: check-required-vars images/build $(BUILD_DIR)/deployer $(BUILD_DIR)/tester
 	$(call print_success,All images built for $(APP_ID))
 
 #=============================================================================

@@ -40,13 +40,13 @@ spec:
 
       ## Accessing the UI
 
-      Get the external IP of the Consul UI service:
+      Port-forward the Consul UI service:
 
       ```
-      kubectl get service $name-consul-ui -n $namespace -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+      kubectl port-forward service/$name-consul-ui -n $namespace 8500:8500
       ```
 
-      Then access the UI at http://<EXTERNAL_IP>:8500/ui
+      Then access the UI at http://localhost:8500/ui
 
       ## Verifying the Cluster
 
@@ -83,6 +83,8 @@ spec:
     matchLabels:
       app.kubernetes.io/name: "$name"
   componentKinds:
+    - group: v1
+      kind: Pod
     - group: v1
       kind: Secret
     - group: v1
