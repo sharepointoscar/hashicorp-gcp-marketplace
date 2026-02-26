@@ -99,12 +99,17 @@ products/terraform-enterprise/
 │       ├── Chart.yaml
 │       ├── values.yaml
 │       └── templates/
+│           ├── _helpers.tpl             # Template helpers + env var mapping
+│           ├── application.yaml         # GCP Marketplace Application CRD
+│           ├── config-map.yaml          # TFE configuration
 │           ├── deployment.yaml          # TFE Deployment with init containers
+│           ├── embedded-minio.yaml      # In-cluster MinIO (S3-compatible)
 │           ├── embedded-postgres.yaml   # In-cluster PostgreSQL (SSL enabled)
 │           ├── embedded-redis.yaml      # In-cluster Redis
-│           ├── embedded-minio.yaml      # In-cluster MinIO (S3-compatible)
-│           ├── _helpers.tpl             # Template helpers + env var mapping
-│           └── ...
+│           ├── secret.yaml              # TLS and credential secrets
+│           ├── service.yaml             # TFE service (LoadBalancer)
+│           ├── ubbagent-config.yaml     # Usage-based billing config
+│           └── ...                      # ingress, pdb, rbac, etc.
 ├── deployer/
 │   └── Dockerfile               # Deployer image (deployer_helm base)
 ├── apptest/
@@ -114,9 +119,11 @@ products/terraform-enterprise/
 │       ├── Dockerfile
 │       ├── tester.sh
 │       └── tests/
+│           └── health-check.yaml
 ├── images/
 │   ├── tfe/Dockerfile           # TFE container image
 │   └── ubbagent/Dockerfile      # Usage-based billing agent
+├── test-certs/                  # Self-signed test certificates
 └── terraform/                   # Infrastructure provisioning (legacy)
 ```
 
@@ -171,7 +178,7 @@ User inputs defined in `schema.yaml`:
 ### Service Account
 | Property | Description |
 |----------|-------------|
-| `serviceAccount` | K8s service account |
+| `tfeServiceAccount` | K8s service account for in-cluster operations |
 | `reportingSecret` | GCP Marketplace reporting secret |
 
 ## Troubleshooting
@@ -230,7 +237,8 @@ com.googleapis.cloudmarketplace.product.service.name=<MP_SERVICE_NAME>
 These files must have matching versions:
 1. `schema.yaml` → `publishedVersion: '1.1.3'`
 2. `apptest/deployer/schema.yaml` → `publishedVersion: '1.1.3'`
-3. `Makefile` → `VERSION ?= 1.1.3`
+3. `chart/terraform-enterprise/Chart.yaml` → `version: 1.1.3` and `appVersion: "1.1.3"`
+4. `Makefile` → `VERSION ?= 1.1.3`
 
 ## GCP Marketplace Requirements
 

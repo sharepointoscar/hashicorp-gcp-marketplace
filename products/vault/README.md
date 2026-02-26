@@ -1,13 +1,13 @@
 # HashiCorp Vault Enterprise - GCP Marketplace
 
 This is the GCP Marketplace Click-to-Deploy package for **HashiCorp Vault Enterprise**
-using **file backend storage** on GKE. It is designed to be self-contained: no
+using **Raft integrated storage** on GKE. It is designed to be self-contained: no
 external database is required.
 
 ## Architecture Overview
 
 - **Type**: Kubernetes App (Click-to-Deploy via `mpdev`)
-- **Storage**: File backend with PVC (single-node)
+- **Storage**: Raft integrated storage with PVC (single-node)
 - **License**: Vault Enterprise license injected via `VAULT_LICENSE` env var
 - **Images**: Vault Enterprise base image from Docker Hub
 - **Billing**: UBB agent sidecar for GCP Marketplace usage reporting
@@ -43,7 +43,7 @@ external database is required.
 ```bash
 export PROJECT_ID=<your-gcp-project>
 export REGISTRY=us-docker.pkg.dev/$PROJECT_ID/vault-marketplace
-export TAG=1.21.0
+export TAG=1.21.3
 ```
 
 ## Step-by-Step Deployment
@@ -132,9 +132,11 @@ These can be overridden via schema inputs:
 
 | Property | Default | Description |
 |---------|---------|-------------|
-| `replicas` | 1 | Vault server replicas (single-node) |
+| `replicas` | 1 | Vault server replicas (single-node, max 1) |
 | `storageClass` | SSD | Storage class for PVC |
-| `storageSize` | 10Gi | PVC size |
+| `storageSize` | 10Gi | PVC size for Raft data |
+| `enableUI` | true | Deploy the Vault web interface |
+| `enableInjector` | true | Deploy sidecar injector for automatic secrets injection |
 | `vaultLicense` | required | Enterprise license (masked) |
 | `reportingSecret` | required | Marketplace billing secret |
 | `vaultResourcesRequestsCpu` | 500m | CPU request per pod |

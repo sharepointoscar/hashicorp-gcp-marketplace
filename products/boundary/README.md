@@ -425,14 +425,27 @@ sudo cat /etc/boundary.d/controller.hcl
 | `cidr_ingress_worker_allow` | `["0.0.0.0/0"]` | CIDR ranges for worker access (port 9202) |
 | `cidr_ingress_ssh_allow` | `["10.0.0.0/8"]` | CIDR ranges for SSH via IAP |
 
+### Boundary Version
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `boundary_version` | `0.21.0+ent` | Boundary Enterprise version to install |
+
+### Labels
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `common_labels` | `{managed-by = "terraform", product = "boundary-enterprise"}` | Common labels applied to all resources |
+
 ### Marketplace Variables (auto-populated)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `boundary_image_family` | `boundary-enterprise` | VM image family |
-| `boundary_image_project` | `null` | Image project (defaults to `project_id`) |
+| `boundary_image` | `projects/ibm-software-mp-project/global/images/hashicorp-ubuntu2204-boundary-x86-64-v0210-20260224` | Full path to VM image for Boundary instances |
 | `friendly_name_prefix` | `mp` | Resource name prefix (max 12 chars) |
 | `goog_cm_deployment_name` | `""` | Marketplace deployment name |
+| `zone` | `""` | GCP zone for zonal resources |
+| `adminEmailAddress` | `""` | Admin email address for notifications |
 
 ### Outputs
 
@@ -490,14 +503,21 @@ products/boundary/
 ├── outputs.tf                    # Output values
 ├── versions.tf                   # Provider versions
 ├── marketplace_test.tfvars       # Test/template configuration
+├── deploy-with-logging.sh        # Deployment script with logging
 │
 ├── metadata.yaml                 # GCP Marketplace blueprint metadata
 ├── metadata.display.yaml         # Marketplace UI configuration
 │
+├── scripts/
+│   └── post-deploy-test.sh       # Post-deployment test script
+│
+├── test-certs/                   # Test TLS certificates
+│
 ├── packer/
 │   ├── boundary.pkr.hcl          # Packer template for VM image
 │   └── scripts/
-│       └── install-boundary.sh   # Boundary installation script
+│       ├── install-boundary.sh   # Boundary installation script
+│       └── startup-script.sh     # VM startup script
 │
 └── modules/
     ├── controller/               # Controller HVD module (Cloud SQL, KMS, LB)
