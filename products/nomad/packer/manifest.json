@@ -1,0 +1,59 @@
+{
+  "builds": [
+    {
+      "name": "nomad",
+      "builder_type": "googlecompute",
+      "build_time": 1771982752,
+      "files": null,
+      "artifact_id": "hashicorp-ubuntu2204-nomad-x86-64-v1112-20260224",
+      "packer_run_uuid": "a2688f01-466e-3579-8a6a-b97375da27d8",
+      "custom_data": null
+    },
+    {
+      "name": "nomad",
+      "builder_type": "googlecompute",
+      "build_time": 1772045875,
+      "files": null,
+      "artifact_id": "hashicorp-ubuntu2204-nomad-x86-64-v1112-20260225",
+      "packer_run_uuid": "11b25349-f440-a4e0-caf5-92cece1eaf99",
+      "custom_data": null
+    },
+    {
+      "name": "nomad",
+      "builder_type": "googlecompute",
+      "build_time": 1772066722,
+      "files": null,
+      "artifact_id": "hashicorp-ubuntu2204-nomad-x86-64-v1112-20260225",
+      "packer_run_uuid": "50ae5493-95be-40c7-933e-c87d02b30d73",
+      "custom_data": null
+    },
+    {
+      "name": "nomad",
+      "builder_type": "googlecompute",
+      "build_time": 1772117668,
+      "files": null,
+      "artifact_id": "hashicorp-ubuntu2204-nomad-x86-64-v1112-20260226",
+      "packer_run_uuid": "e1fb615f-2e16-92a8-dc3f-61d985e8c1a2",
+      "custom_data": null
+    },
+    {
+      "name": "nomad",
+      "builder_type": "googlecompute",
+      "build_time": 1772129829,
+      "files": null,
+      "artifact_id": "hashicorp-ubuntu2204-nomad-x86-64-v1112-20260226",
+      "packer_run_uuid": "b4245186-8cd7-faea-9202-7edbb769a7ad",
+      "custom_data": null
+    },
+    {
+      "name": "nomad",
+      "builder_type": "googlecompute",
+      "build_time": 1772132741,
+      "files": null,
+      "artifact_id": "hashicorp-ubuntu2204-nomad-x86-64-v1112-20260226",
+      "packer_run_uuid": "c2acfb5e-78fd-1857-3be8-0bc50726a883",
+      "custom_data": null
+    }
+  ],
+  "last_run_uuid": "c2acfb5e-78fd-1857-3be8-0bc50726a883"
+}
