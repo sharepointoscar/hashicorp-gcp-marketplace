@@ -62,36 +62,68 @@ Terraform Cloud Agent is a lightweight process that executes Terraform runs on b
 | `namespace` | Kubernetes namespace for deployment | Yes |
 | `replicas` | Number of agent pods (1-10) | Yes |
 | `agentToken` | Agent pool token from TFC/TFE | Yes |
+| `reportingSecret` | GCP Marketplace reporting secret for billing | Yes |
 | `agentName` | Prefix for agent names | No (default: `gcp-agent`) |
+| `tfcAgentServiceAccount` | Service account for TFC Agent pods | No (auto-created) |
 
-## Build Commands
+## Build and Validation
+
+The standard validation workflow uses the shared `validate-marketplace.sh` script, which runs the full pipeline: prerequisites check, image builds, schema verification, mpdev install, mpdev verify, and vulnerability scan.
 
 ```bash
-# Build all images
-REGISTRY=gcr.io/$PROJECT_ID TAG=1.15.0 make app/build
+# Standard validation workflow (recommended)
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfc-agent-marketplace TAG=1.15.0 \
+  ./shared/scripts/validate-marketplace.sh terraform-cloud-agent
 
-# Run GCP Marketplace verification
-REGISTRY=gcr.io/$PROJECT_ID TAG=1.15.0 make app/verify
+# Build only (from product directory)
+cd products/terraform-cloud-agent
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfc-agent-marketplace TAG=1.15.0 \
+  MP_SERVICE_NAME="services/terraform-cloud-agent.endpoints.$PROJECT_ID.cloud.goog" \
+  make app/build
+
+# Run mpdev verify only (from product directory)
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfc-agent-marketplace TAG=1.15.0 \
+  make app/verify
+
+# Run mpdev install only (from product directory)
+REGISTRY=us-docker.pkg.dev/$PROJECT_ID/tfc-agent-marketplace TAG=1.15.0 \
+  make app/install
+
+# Cleanup test namespaces
+./shared/scripts/validate-marketplace.sh terraform-cloud-agent --cleanup
 ```
+
+**Environment variables:**
+
+| Variable | Description |
+|----------|-------------|
+| `REGISTRY` | Artifact Registry path (e.g., `us-docker.pkg.dev/$PROJECT_ID/tfc-agent-marketplace`) |
+| `TAG` | Image version tag (must match `schema.yaml` `publishedVersion`) |
+| `MP_SERVICE_NAME` | GCP Marketplace service annotation (required for image builds) |
+| `PROJECT_ID` | GCP project ID |
 
 ## Directory Structure
 
 ```
 products/terraform-cloud-agent/
-├── Makefile                  # Build targets
-├── schema.yaml               # GCP Marketplace schema (user inputs)
-├── product.yaml              # Product metadata
+├── Makefile                          # Build targets (app/build, includes shared Makefiles)
+├── schema.yaml                       # GCP Marketplace schema (user inputs)
+├── product.yaml                      # Product metadata (id, version, partnerId, solutionId)
+├── README.md                         # This file
 ├── manifest/
-│   ├── application.yaml.template   # GCP Marketplace Application CRD
-│   └── manifests.yaml.template     # Kubernetes resources
+│   ├── application.yaml.template     # GCP Marketplace Application CRD
+│   └── manifests.yaml.template       # Kubernetes resources (Deployment, Secret, ConfigMap)
 ├── deployer/
-│   └── Dockerfile            # Deployer image
+│   └── Dockerfile                    # Deployer image (envsubst-based)
 ├── apptest/
 │   └── deployer/
-│       └── Dockerfile        # Tester image
+│       ├── Dockerfile                # Tester deployer image
+│       ├── schema.yaml               # Test schema with default values
+│       └── manifest/
+│           └── tester.yaml.template  # Verification test pod (10 tests)
 └── images/
     └── tfc-agent/
-        └── Dockerfile        # TFC Agent image
+        └── Dockerfile                # TFC Agent image (based on hashicorp/tfc-agent)
 ```
 
 ## Creating an Agent Pool Token

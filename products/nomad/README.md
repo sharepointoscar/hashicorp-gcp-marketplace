@@ -71,7 +71,7 @@ The module is self-contained: a single `terraform apply` creates all prerequisit
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | Product type | VM Solution | HashiCorp's official reference architecture is VM-based |
-| Storage | Raft on dedicated pd-ssd | No external DB; HVD default (500GB data + 50GB audit) |
+| Storage | Raft on dedicated pd-ssd | No external DB; HVD default (50GB data + 50GB audit) |
 | Discovery | GCE cloud auto-join | No Consul dependency; native GCP integration |
 | TLS | Self-signed by default | Simplified deployment; user can provide own certs |
 | Gossip | Auto-generated key | Stored in Secret Manager; simplifies setup |
@@ -217,7 +217,7 @@ subnet_name = "default"
 # tls_ca_bundle_path = "/path/to/ca-bundle.pem"
 
 # Optional - Sizing
-# node_count   = 6
+# node_count   = 5
 # machine_type = "n2-standard-4"
 
 # Optional - Load balancer (INTERNAL, EXTERNAL, or NONE)
@@ -310,11 +310,8 @@ sudo cat /etc/nomad.d/nomad.hcl
 | Variable | Description |
 |----------|-------------|
 | `project_id` | GCP project ID |
-| `region` | GCP region (e.g., `us-central1`) |
 | `nomad_fqdn` | Fully qualified domain name for Nomad |
 | `license_file_path` | Path to Nomad Enterprise license file (.hclic) |
-| `vpc_name` | VPC network name |
-| `subnet_name` | Subnet name for Nomad VMs |
 
 ### TLS Variables (Optional)
 
@@ -330,28 +327,30 @@ sudo cat /etc/nomad.d/nomad.hcl
 |----------|---------|-------------|
 | `nomad_version` | `1.11.2+ent` | Nomad Enterprise version |
 | `nomad_datacenter` | `dc1` | Nomad datacenter name |
-| `nomad_region` | `global` | Nomad region name |
-| `node_count` | `6` | Number of server VMs |
-| `enable_acl` | `true` | Enable Nomad ACLs |
-| `enable_ui` | `true` | Enable Nomad UI |
+| `nomad_region` | `null` | Nomad region name (uses Nomad default if null) |
+| `node_count` | `3` | Number of Nomad server nodes (must be odd: 1, 3, 5) |
+| `nomad_acl_enabled` | `true` | Enable Nomad ACLs |
+| `nomad_enable_ui` | `true` | Enable Nomad web UI |
 
 ### Compute Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `machine_type` | `n2-standard-4` | VM machine type |
-| `boot_disk_size` | `30` | Boot disk size (GB) |
-| `data_disk_size` | `500` | Raft data disk size (GB, pd-ssd) |
-| `audit_disk_size` | `50` | Audit log disk size (GB) |
+| `machine_type` | `n2-standard-4` | GCE machine type for Nomad server VMs |
+| `boot_disk_size` | `100` | Boot disk size (GB) |
+| `data_disk_size` | `50` | Nomad data disk size in GB (Raft storage, pd-ssd) |
+| `audit_disk_size` | `50` | Nomad audit log disk size (GB) |
 
 ### Network Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `vpc_project_id` | `null` | VPC project ID if different from deployment project |
-| `cidr_ingress_api_allow` | `["0.0.0.0/0"]` | CIDR ranges for API access (port 4646) |
-| `cidr_ingress_rpc_allow` | `["0.0.0.0/0"]` | CIDR ranges for RPC access (port 4647) |
-| `cidr_ingress_ssh_allow` | `["10.0.0.0/8"]` | CIDR ranges for SSH via IAP |
+| `region` | `us-central1` | GCP region for all resources |
+| `vpc_name` | `default` | Name of the VPC network |
+| `subnet_name` | `default` | Name of the subnet within the VPC |
+| `vpc_project_id` | `null` | Project ID containing the VPC (for Shared VPC). Defaults to project_id if null |
+| `cidr_ingress_api_allow` | `["0.0.0.0/0"]` | CIDR ranges allowed to access the Nomad API (port 4646) |
+| `cidr_ingress_rpc_allow` | `["0.0.0.0/0"]` | CIDR ranges allowed for RPC/Serf traffic (ports 4647, 4648) |
 
 ### Load Balancer
 
@@ -363,16 +362,28 @@ sudo cat /etc/nomad.d/nomad.hcl
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `create_cloud_dns_record` | `false` | Create Cloud DNS record for nomad_fqdn |
-| `cloud_dns_managed_zone` | `null` | Cloud DNS managed zone name |
+| `create_cloud_dns_record` | `false` | Create a Cloud DNS A record for nomad_fqdn pointing to the load balancer |
+| `cloud_dns_managed_zone` | `null` | Cloud DNS managed zone name (required if create_cloud_dns_record is true) |
+
+### GCS Snapshots
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `create_snapshot_bucket` | `true` | Create a GCS bucket for Nomad Raft snapshots |
+
+### Labels
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `common_labels` | `{}` | Common labels to apply to all GCP resources |
 
 ### Marketplace Variables (auto-populated)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `nomad_image` | `null` | Full path to pre-baked VM image |
-| `friendly_name_prefix` | `mp` | Resource name prefix (max 12 chars) |
-| `goog_cm_deployment_name` | `""` | Marketplace deployment name |
+| `nomad_image` | (pre-built image path) | Packer-built VM image for Nomad (overrides default Ubuntu image) |
+| `friendly_name_prefix` | `nomad` | Prefix for resource names when not deployed via Marketplace |
+| `goog_cm_deployment_name` | `""` | Marketplace deployment name (auto-populated by GCP Marketplace UI) |
 
 ### Outputs
 

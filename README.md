@@ -4,14 +4,14 @@ This monorepo contains Google Cloud Marketplace packages for HashiCorp products.
 
 ## Products
 
-| Product | GCP Marketplace Type | Status | Description |
-|---------|---------------------|--------|-------------|
-| [Terraform Enterprise](products/terraform-enterprise/) | Kubernetes App (Click-to-Deploy) | Active | Terraform automation with external services (Cloud SQL, Redis, GCS) |
-| [Vault](products/vault/) | Kubernetes App (Click-to-Deploy) | Active | Secrets management with Raft integrated storage |
-| [Consul](products/consul/) | Kubernetes App (Click-to-Deploy) | Active | Service mesh and service discovery |
-| [Terraform Cloud Agent](products/terraform-cloud-agent/) | Kubernetes App (Click-to-Deploy) | Active | Terraform Cloud remote execution agent |
-| [Boundary](products/boundary/) | VM Solution (Terraform Blueprint) | Active | Secure remote access with Cloud SQL, KMS, and worker proxies |
-| Nomad | VM Solution (Terraform Blueprint) | Planned | Workload orchestration |
+| Product | Version | GCP Marketplace Type | Status | Description |
+|---------|---------|---------------------|--------|-------------|
+| [Terraform Enterprise](products/terraform-enterprise/) | 1.1.3 | Kubernetes App (Click-to-Deploy) | Active | Self-contained Terraform automation (embedded PostgreSQL, Redis, MinIO) |
+| [Vault](products/vault/) | 1.21.3 | Kubernetes App (Click-to-Deploy) | Active | Secrets management with file backend storage |
+| [Consul](products/consul/) | 1.21.7 | Kubernetes App (Click-to-Deploy) | Active | Service mesh and service discovery with Raft integrated storage |
+| [Terraform Cloud Agent](products/terraform-cloud-agent/) | 1.15.0 | Kubernetes App (Click-to-Deploy) | Active | Terraform Cloud remote execution agent |
+| [Boundary](products/boundary/) | 0.21.2 | VM Solution (Terraform Blueprint) | Active | Secure remote access with Cloud SQL, KMS, and worker proxies |
+| [Nomad](products/nomad/) | 1.11.2 | VM Solution (Terraform Blueprint) | Active | Workload orchestration with Raft integrated storage |
 
 ### Product Types
 
@@ -33,7 +33,8 @@ hashicorp-gcp-marketplace/
 │   ├── vault/                     # Vault - Kubernetes App
 │   ├── consul/                    # Consul - Kubernetes App
 │   ├── terraform-cloud-agent/     # TFC Agent - Kubernetes App
-│   └── boundary/                  # Boundary - VM Solution (Terraform)
+│   ├── boundary/                  # Boundary - VM Solution (Terraform)
+│   └── nomad/                     # Nomad - VM Solution (Terraform)
 └── docs/                          # Documentation
 ```
 
@@ -117,7 +118,8 @@ Each product uses independent release tags:
 | Vault | `vault-v*` | `vault-v1.21.0` |
 | Consul | `consul-v*` | `consul-v1.22.2` |
 | Terraform Cloud Agent | `tfc-agent-v*` | `tfc-agent-v1.0.0` |
-| Boundary | `boundary-v*` | `boundary-v0.21.0` |
+| Boundary | `boundary-v*` | `boundary-v0.21.2` |
+| Nomad | `nomad-v*` | `nomad-v1.11.2` |
 
 ## License
 
