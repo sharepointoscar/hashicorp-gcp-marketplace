@@ -1,0 +1,199 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
+apiVersion: blueprints.cloud.google.com/v1alpha1
+kind: BlueprintMetadata
+metadata:
+  name: nomad-enterprise-display
+  annotations:
+    config.kubernetes.io/local-config: "true"
+spec:
+  info:
+    title: HashiCorp Nomad Enterprise
+    source:
+      repo: https://github.com/hashicorp/hashicorp-gcp-marketplace.git
+      sourceType: git
+  ui:
+    input:
+      sections:
+        - name: required
+          title: Required Configuration
+        - name: licensing
+          title: Licensing & TLS
+        - name: network
+          title: Network Configuration
+        - name: nomad_config
+          title: Nomad Configuration
+        - name: compute
+          title: Compute Configuration
+        - name: dns
+          title: DNS Configuration
+        - name: security
+          title: Security & Firewall
+        - name: load_balancer
+          title: Load Balancer
+        - name: advanced
+          title: Advanced Options
+      variables:
+        # Required Section
+        project_id:
+          name: project_id
+          title: Project ID
+          section: required
+        region:
+          name: region
+          title: Region
+          section: required
+          xGoogleProperty:
+            type: ET_GCE_REGION
+        nomad_fqdn:
+          name: nomad_fqdn
+          title: Nomad FQDN
+          section: required
+          placeholder: nomad.example.com
+          tooltip: Fully qualified domain name for the Nomad cluster. Used for TLS and peer joining.
+        # Licensing Section
+        license_file_path:
+          name: license_file_path
+          title: License File Path
+          section: licensing
+          tooltip: Path to Nomad Enterprise license file (.hclic).
+        tls_cert_path:
+          name: tls_cert_path
+          title: TLS Certificate Path (Optional)
+          section: licensing
+          tooltip: Path to TLS certificate file. If not provided, a self-signed cert is generated.
+        tls_key_path:
+          name: tls_key_path
+          title: TLS Private Key Path (Optional)
+          section: licensing
+          tooltip: Path to TLS private key file. If not provided, a self-signed key is generated.
+        tls_ca_bundle_path:
+          name: tls_ca_bundle_path
+          title: CA Bundle Path (Optional)
+          section: licensing
+          tooltip: Path to CA bundle file. Optional.
+        # Network Section
+        vpc_name:
+          name: vpc_name
+          title: VPC Network
+          section: network
+          xGoogleProperty:
+            type: ET_GCE_NETWORK
+        subnet_name:
+          name: subnet_name
+          title: Subnet
+          section: network
+          xGoogleProperty:
+            type: ET_GCE_SUBNETWORK
+        vpc_project_id:
+          name: vpc_project_id
+          title: VPC Project ID (Optional)
+          section: network
+          tooltip: Only required if VPC is in a different project (Shared VPC).
+        # Nomad Config Section
+        nomad_version:
+          name: nomad_version
+          title: Nomad Version
+          section: nomad_config
+        nomad_datacenter:
+          name: nomad_datacenter
+          title: Datacenter Name
+          section: nomad_config
+          tooltip: Nomad datacenter name for the server cluster.
+        nomad_region:
+          name: nomad_region
+          title: Nomad Region (Optional)
+          section: nomad_config
+          tooltip: Nomad region name. Leave empty for default.
+        node_count:
+          name: node_count
+          title: Server Node Count
+          section: nomad_config
+          tooltip: Number of Nomad server nodes. Must be an odd number (1, 3, 5).
+        nomad_acl_enabled:
+          name: nomad_acl_enabled
+          title: Enable ACLs
+          section: nomad_config
+        nomad_enable_ui:
+          name: nomad_enable_ui
+          title: Enable Web UI
+          section: nomad_config
+        # Compute Section
+        machine_type:
+          name: machine_type
+          title: Machine Type
+          section: compute
+          xGoogleProperty:
+            type: ET_GCE_MACHINE_TYPE
+        boot_disk_size:
+          name: boot_disk_size
+          title: Boot Disk Size (GB)
+          section: compute
+        data_disk_size:
+          name: data_disk_size
+          title: Data Disk Size (GB)
+          section: compute
+          tooltip: Dedicated SSD disk for Raft storage.
+        audit_disk_size:
+          name: audit_disk_size
+          title: Audit Disk Size (GB)
+          section: compute
+          tooltip: Dedicated disk for audit logs.
+        # DNS Section
+        create_cloud_dns_record:
+          name: create_cloud_dns_record
+          title: Create Cloud DNS Record
+          section: dns
+        cloud_dns_managed_zone:
+          name: cloud_dns_managed_zone
+          title: Cloud DNS Managed Zone
+          section: dns
+          tooltip: Required if Create Cloud DNS Record is enabled.
+        # Security Section
+        cidr_ingress_api_allow:
+          name: cidr_ingress_api_allow
+          title: API Access CIDR Ranges
+          section: security
+          tooltip: CIDR ranges allowed to access Nomad API (port 4646).
+        cidr_ingress_rpc_allow:
+          name: cidr_ingress_rpc_allow
+          title: RPC Access CIDR Ranges
+          section: security
+          tooltip: CIDR ranges allowed for RPC/Serf traffic (ports 4647, 4648).
+        # Load Balancer Section
+        load_balancing_scheme:
+          name: load_balancing_scheme
+          title: Load Balancer Type
+          section: load_balancer
+          enumValueLabels:
+            - label: Internal (Private)
+              value: INTERNAL
+            - label: External (Public)
+              value: EXTERNAL
+            - label: None
+              value: NONE
+        # GCS Section
+        create_snapshot_bucket:
+          name: create_snapshot_bucket
+          title: Create Snapshot Bucket
+          section: advanced
+          tooltip: Create a GCS bucket for Nomad Raft snapshots.
+        # Advanced Section
+        nomad_image:
+          name: nomad_image
+          title: Nomad VM Image
+          section: advanced
+          invisible: true
+          xGoogleProperty:
+            type: ET_GCE_DISK_IMAGE
+        friendly_name_prefix:
+          name: friendly_name_prefix
+          title: Resource Name Prefix
+          section: advanced
+          tooltip: Prefix for uniquely naming resources.
+        goog_cm_deployment_name:
+          name: goog_cm_deployment_name
+          title: Marketplace Deployment Name
+          section: advanced
+          invisible: true

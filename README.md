@@ -11,7 +11,7 @@ This monorepo contains Google Cloud Marketplace packages for HashiCorp products.
 | [Consul](products/consul/) | Kubernetes App (Click-to-Deploy) | Active | Service mesh and service discovery |
 | [Terraform Cloud Agent](products/terraform-cloud-agent/) | Kubernetes App (Click-to-Deploy) | Active | Terraform Cloud remote execution agent |
 | [Boundary](products/boundary/) | VM Solution (Terraform Blueprint) | Active | Secure remote access with Cloud SQL, KMS, and worker proxies |
-| Nomad | TBD | Planned | Workload orchestration |
+| Nomad | VM Solution (Terraform Blueprint) | Planned | Workload orchestration |
 
 ### Product Types
 

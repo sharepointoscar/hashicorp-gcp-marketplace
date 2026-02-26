@@ -1,0 +1,18 @@
+# License files (contain sensitive data)
+*.hclic
+
+# Build artifacts
+.build/
+
+# Terraform state and local files
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate.d/
+
+# Test variables (may contain sensitive values)
+marketplace_test.tfvars
+
+# OS artifacts
+.DS_Store

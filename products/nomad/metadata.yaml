@@ -1,0 +1,219 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
+apiVersion: blueprints.cloud.google.com/v1alpha1
+kind: BlueprintMetadata
+metadata:
+  name: nomad-enterprise
+  annotations:
+    config.kubernetes.io/local-config: "true"
+spec:
+  info:
+    title: HashiCorp Nomad Enterprise
+    source:
+      repo: https://github.com/hashicorp/hashicorp-gcp-marketplace.git
+      sourceType: git
+    version: 1.11.2
+    actuationTool:
+      flavor: Terraform
+      version: ">=1.3.0"
+    description:
+      tagline: Workload orchestration for modern infrastructure
+      detailed: |
+        HashiCorp Nomad Enterprise deploys and manages applications across
+        any infrastructure. This deployment uses Raft integrated storage
+        with no external database required. Server VMs are distributed
+        across 3 availability zones in a regional Managed Instance Group.
+      architecture:
+        - Server VMs form a Raft consensus cluster for state management
+        - Regional MIG distributes across 3 availability zones
+        - TLS encrypts all traffic, gossip encryption secures cluster membership
+        - Internal/External load balancer for API and UI access
+        - Secret Manager stores license, TLS certificates, and gossip key
+        - GCS bucket for Raft snapshot storage (optional)
+  content:
+    subBlueprints:
+      - name: server
+        location: modules/server
+      - name: prerequisites
+        location: modules/prerequisites
+    documentation:
+      - title: Nomad Documentation
+        url: https://developer.hashicorp.com/nomad/docs
+      - title: Nomad Enterprise Features
+        url: https://developer.hashicorp.com/nomad/docs/enterprise
+      - title: HVD Reference Architecture
+        url: https://github.com/hashicorp/terraform-google-nomad-enterprise-hvd
+  interfaces:
+    variables:
+      # Required
+      - name: project_id
+        description: GCP project ID to deploy Nomad Enterprise into.
+        varType: string
+        required: true
+      - name: region
+        description: GCP region for all resources.
+        varType: string
+        required: true
+      - name: nomad_fqdn
+        description: Fully qualified domain name for Nomad cluster.
+        varType: string
+        required: true
+      - name: license_file_path
+        description: Path to the Nomad Enterprise license file (.hclic).
+        varType: string
+        required: true
+      # TLS
+      - name: tls_cert_path
+        description: Path to TLS certificate file. If null, self-signed cert is generated.
+        varType: string
+      - name: tls_key_path
+        description: Path to TLS private key file. If null, self-signed key is generated.
+        varType: string
+      - name: tls_ca_bundle_path
+        description: Path to CA bundle file. Optional.
+        varType: string
+      # Network
+      - name: vpc_name
+        description: Name of the VPC network.
+        varType: string
+        defaultValue: default
+      - name: subnet_name
+        description: Name of the subnet within the VPC.
+        varType: string
+        defaultValue: default
+      - name: vpc_project_id
+        description: Project ID where VPC resides (for Shared VPC).
+        varType: string
+      # Nomad Config
+      - name: nomad_version
+        description: Nomad Enterprise version to install.
+        varType: string
+        defaultValue: "1.11.2+ent"
+      - name: nomad_datacenter
+        description: Nomad datacenter name.
+        varType: string
+        defaultValue: dc1
+      - name: nomad_region
+        description: Nomad region name.
+        varType: string
+      - name: node_count
+        description: Number of Nomad server nodes (must be odd).
+        varType: number
+        defaultValue: 3
+      - name: nomad_acl_enabled
+        description: Enable Nomad ACLs.
+        varType: bool
+        defaultValue: true
+      - name: nomad_enable_ui
+        description: Enable Nomad web UI.
+        varType: bool
+        defaultValue: true
+      # Compute
+      - name: machine_type
+        description: GCE machine type for server VMs.
+        varType: string
+        defaultValue: n2-standard-4
+      - name: boot_disk_size
+        description: Boot disk size in GB.
+        varType: number
+        defaultValue: 100
+      - name: data_disk_size
+        description: Nomad data disk size in GB (Raft storage).
+        varType: number
+        defaultValue: 50
+      - name: audit_disk_size
+        description: Nomad audit log disk size in GB.
+        varType: number
+        defaultValue: 50
+      # DNS
+      - name: create_cloud_dns_record
+        description: Create Cloud DNS A record for nomad_fqdn.
+        varType: bool
+        defaultValue: false
+      - name: cloud_dns_managed_zone
+        description: Cloud DNS managed zone name.
+        varType: string
+      # Firewall
+      - name: cidr_ingress_api_allow
+        description: CIDR ranges allowed to access Nomad API (port 4646).
+        varType: list(string)
+        defaultValue:
+          - "0.0.0.0/0"
+      - name: cidr_ingress_rpc_allow
+        description: CIDR ranges allowed for RPC/Serf traffic (ports 4647, 4648).
+        varType: list(string)
+        defaultValue:
+          - "0.0.0.0/0"
+      # Load Balancer
+      - name: load_balancing_scheme
+        description: "Load balancer type: INTERNAL, EXTERNAL, or NONE."
+        varType: string
+        defaultValue: INTERNAL
+      # GCS
+      - name: create_snapshot_bucket
+        description: Create GCS bucket for Raft snapshots.
+        varType: bool
+        defaultValue: true
+      # Labels
+      - name: common_labels
+        description: Common labels for all GCP resources.
+        varType: map(string)
+        defaultValue: {}
+      # Marketplace
+      - name: nomad_image
+        description: Packer-built VM image for Nomad.
+        varType: string
+        defaultValue: "projects/ibm-software-mp-project/global/images/hashicorp-ubuntu2204-nomad-x86-64-v1112-20260226"
+      - name: friendly_name_prefix
+        description: Prefix for resource names.
+        varType: string
+        defaultValue: nomad
+      - name: goog_cm_deployment_name
+        description: GCP Marketplace deployment name (auto-populated).
+        varType: string
+        defaultValue: ""
+    outputs:
+      - name: nomad_url
+        description: URL to access Nomad UI and API.
+      - name: nomad_fqdn
+        description: Fully qualified domain name for Nomad.
+      - name: load_balancer_ip
+        description: IP address of the Nomad load balancer.
+      - name: deployment_id
+        description: Unique deployment identifier.
+      - name: nomad_version
+        description: Deployed Nomad Enterprise version.
+      - name: region
+        description: GCP region of the deployment.
+      - name: snapshot_bucket
+        description: GCS bucket name for Nomad snapshots.
+      - name: nomad_cli_config
+        description: Environment variables for Nomad CLI.
+      - name: post_deployment_instructions
+        description: Post-deployment setup instructions.
+  requirements:
+    roles:
+      - level: Project
+        roles:
+          - roles/compute.admin
+          - roles/iam.serviceAccountAdmin
+          - roles/iam.serviceAccountUser
+          - roles/secretmanager.admin
+          - roles/storage.admin
+          - roles/dns.admin
+    services:
+      - compute.googleapis.com
+      - secretmanager.googleapis.com
+      - dns.googleapis.com
+      - iam.googleapis.com
+      - storage.googleapis.com
+    providerVersions:
+      - source: hashicorp/google
+        version: ">= 5.0.0"
+      - source: hashicorp/google-beta
+        version: ">= 5.0.0"
+      - source: hashicorp/random
+        version: ">= 3.0.0"
+      - source: hashicorp/tls
+        version: ">= 4.0.0"
